@@ -1,0 +1,20 @@
+import { z } from "zod";
+import { tandaiDibuka } from "@/lib/data";
+
+const Skema = z.object({
+  slug: z.string().regex(/^[a-z0-9-]{3,60}$/),
+  kode: z.string().regex(/^[a-z0-9]{4,12}$/),
+});
+
+// Dipanggil saat tamu menekan "Buka Undangan" (bukan saat halaman dimuat),
+// supaya bot pratinjau link WhatsApp tidak ikut tercatat sebagai "dibuka".
+export async function POST(request: Request) {
+  const hasil = Skema.safeParse(await request.json().catch(() => null));
+  if (!hasil.success) return new Response(null, { status: 400 });
+  try {
+    await tandaiDibuka(hasil.data.slug, hasil.data.kode);
+  } catch (e) {
+    console.error("tandai dibuka gagal", e);
+  }
+  return new Response(null, { status: 204 });
+}

@@ -1,0 +1,6 @@
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: #070b18; color: #fbf1e1; font-family: "Lato", system-ui, sans-serif; }
+img { max-width: 100%; }
+button { font: inherit; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }

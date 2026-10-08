@@ -1,0 +1,105 @@
+{
+  "slug": "arya-nadia",
+  "tema": "kastil",
+  "waktu_acara": "2027-04-03T19:00:00+07:00",
+  "batas_rsvp": "2027-03-27T23:59:00+07:00",
+  "aktif_sampai": "2027-07-03T23:59:00+07:00",
+  "izinkan_tanpa_kode": true,
+  "konten": {
+    "mempelai": {
+      "pria": {
+        "panggilan": "Arya",
+        "nama_lengkap": "Arya Pradana, S.T.",
+        "keterangan": "Putra pertama dari",
+        "orang_tua": "Bapak Hendra Wijaya & Ibu Sri Lestari",
+        "instagram": "aryapradana",
+        "foto": "/tema/bersama/foto-1.webp"
+      },
+      "wanita": {
+        "panggilan": "Nadia",
+        "nama_lengkap": "Nadia Kirana, S.Ds.",
+        "keterangan": "Putri kedua dari",
+        "orang_tua": "Bapak Bambang Sutrisno & Ibu Ratna Sari",
+        "instagram": "nadiakirana",
+        "foto": "/tema/bersama/foto-2.webp"
+      }
+    },
+    "acara": [
+      {
+        "nama": "Akad Nikah",
+        "mulai": "2027-04-03T19:00:00+07:00",
+        "selesai": null,
+        "tempat": "Masjid Al-Ikhlas",
+        "alamat": "Jl. Melati Raya No. 10, Jakarta Selatan",
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Jakarta+Selatan"
+      },
+      {
+        "nama": "Resepsi Taman",
+        "mulai": "2027-04-03T19:30:00+07:00",
+        "selesai": "2027-04-03T22:00:00+07:00",
+        "tempat": "Taman Terbuka Gedung Melati",
+        "alamat": "Jl. Melati Raya No. 12, Jakarta Selatan",
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Jakarta+Selatan"
+      }
+    ],
+    "lokasi_utama": {
+      "nama": "Gedung Serbaguna Melati",
+      "alamat": "Jl. Melati Raya No. 12, Jakarta Selatan",
+      "maps_url": "https://www.google.com/maps/search/?api=1&query=Jakarta+Selatan"
+    },
+    "catatan_acara": "Outdoor di taman · siapkan jaket tipis",
+    "dress_code": [
+      { "nama": "Navy", "warna": "#1E2752" },
+      { "nama": "Emas", "warna": "#E9B95A" },
+      { "nama": "Champagne", "warna": "#F3E3C7" },
+      { "nama": "Hijau hutan", "warna": "#1C4438" }
+    ],
+    "kutipan": {
+      "arab": "وَمِنْ آيَاتِهِ أَنْ خَلَقَ لَكُمْ مِنْ أَنْفُسِكُمْ أَزْوَاجًا لِتَسْكُنُوا إِلَيْهَا وَجَعَلَ بَيْنَكُمْ مَوَدَّةً وَرَحْمَةً",
+      "terjemahan": "Dan di antara tanda-tanda kebesaran-Nya ialah Dia menciptakan pasangan-pasangan untukmu dari jenismu sendiri, agar kamu cenderung dan merasa tenteram kepadanya, dan Dia menjadikan di antaramu rasa kasih dan sayang.",
+      "sumber": "QS. Ar-Rum: 21"
+    },
+    "tagline": "Di bawah cahaya ribuan lampion, kisah kami dimulai.",
+    "kisah": [
+      { "tahun": "2019", "judul": "Pertama Bertemu", "teks": "Kami bertemu di festival lampion di taman kota. Satu lampion yang tersangkut di dahan pohon jadi alasan kami berkenalan.", "foto": "/tema/bersama/foto-1.webp" },
+      { "tahun": "2022", "judul": "Menjadi Kita", "teks": "Setelah tiga tahun berteman, kami memutuskan melangkah bersama dan saling mengenalkan keluarga.", "foto": "/tema/bersama/foto-3.webp" },
+      { "tahun": "2026", "judul": "Lamaran", "teks": "Di malam yang sama setiap tahunnya, Arya melamar Nadia dengan restu kedua keluarga.", "foto": "/tema/bersama/foto-4.webp" },
+      { "tahun": "2027", "judul": "Selamanya", "teks": "Kami memulai babak baru, dan ingin Anda ikut menerbangkan doa bersama kami.", "foto": "/tema/bersama/foto-5.webp" }
+    ],
+    "galeri": [
+      { "src": "/tema/bersama/foto-1.webp", "alt": "Foto galeri 1" },
+      { "src": "/tema/bersama/foto-2.webp", "alt": "Foto galeri 2" },
+      { "src": "/tema/bersama/foto-3.webp", "alt": "Foto galeri 3" },
+      { "src": "/tema/bersama/foto-4.webp", "alt": "Foto galeri 4" },
+      { "src": "/tema/bersama/foto-5.webp", "alt": "Foto galeri 5" },
+      { "src": "/tema/bersama/foto-6.webp", "alt": "Foto galeri 6" }
+    ],
+    "turut_mengundang": [
+      "Keluarga Besar Bapak Hendra Wijaya",
+      "Keluarga Besar Bapak Bambang Sutrisno",
+      "Keluarga Besar Alm. H. Soedarmo",
+      "Rekan-rekan kantor dan sahabat"
+    ],
+    "musik_url": null
+  },
+  "hadiah": {
+    "rekening": [{ "bank": "BCA", "nomor": "1234567890", "atas_nama": "Arya Pradana" }],
+    "alamat": { "penerima": "Nadia Kirana", "alamat": "Jl. Kenanga No. 8, RT 03/RW 05, Jakarta Selatan 12345" }
+  },
+  "tamu": [
+    { "kode": "dn7s", "nama": "Deny Setyawan, S.Kom.", "kategori": "Teman", "maks_orang": 2 },
+    { "kode": "sr4d", "nama": "Bapak H. Suryadi", "kategori": "Keluarga", "maks_orang": 2 },
+    { "kode": "rt2n", "nama": "Ibu Ratna Dewi", "kategori": "Keluarga", "maks_orang": 2 },
+    { "kode": "bm8a", "nama": "Bima Saputra", "kategori": "Teman", "maks_orang": 1 },
+    { "kode": "wl3s", "nama": "Ibu Wulan Sari", "kategori": "Rekan kerja", "maks_orang": 2 },
+    { "kode": "ag5h", "nama": "Pak Agus Hartono", "kategori": "Rekan kerja", "maks_orang": 2 },
+    { "kode": "dr9m", "nama": "Keluarga Besar Pak Darmo", "kategori": "Keluarga", "maks_orang": 5 },
+    { "kode": "ct6y", "nama": "Citra Ayu", "kategori": "Teman", "maks_orang": 2 }
+  ],
+  "ucapan": [
+    { "kode": "sr4d", "nama": "Bapak H. Suryadi", "kehadiran": "hadir", "jumlah": 2, "pesan": "Selamat menempuh hidup baru. Semoga menjadi keluarga yang sakinah, mawaddah, warahmah." },
+    { "kode": "ct6y", "nama": "Citra Ayu", "kehadiran": "hadir", "jumlah": 1, "pesan": "Semoga cinta kalian selalu bersinar seperti lampion malam ini." },
+    { "kode": "wl3s", "nama": "Ibu Wulan Sari", "kehadiran": "hadir", "jumlah": 1, "pesan": "Barakallahu lakuma wa baraka alaikuma wa jama'a bainakuma fii khair." },
+    { "kode": "bm8a", "nama": "Bima Saputra", "kehadiran": "tidak", "jumlah": 0, "pesan": "Selamat ya! Maaf belum bisa datang, doa terbaik dari jauh." }
+  ]
+}
