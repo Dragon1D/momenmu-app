@@ -7,6 +7,8 @@
   --lebar: min(100vw, 480px);
   --u: calc(var(--lebar) / 390);
   --fs: 16px;
+  /* angka tegak (bukan gaya lama) supaya jam, tanggal & hitung mundur mudah dibaca */
+  font-variant-numeric: lining-nums;
   min-height: 100svh;
   background: #070b18;
   color: #fbf1e1;
@@ -19,7 +21,7 @@
   width: var(--lebar);
   margin: 0 auto;
   overflow-x: clip;
-  font-family: "Lato", system-ui, sans-serif;
+  font-family: var(--ff-sans);
   font-size: var(--fs);
   line-height: 1.5;
   background-color: #0f1530;
@@ -31,10 +33,12 @@
 .km a { color: #f6d58e; }
 .km img, .km-tetap img, .km-lightbox img { max-width: none; }
 
-.km-serif { font-family: "Cormorant Garamond", Georgia, serif; }
-.km-script { font-family: "Pinyon Script", "Cormorant Garamond", cursive; font-weight: 400; }
-.km-caps { font-family: "Cinzel", Georgia, serif; letter-spacing: .26em; text-transform: uppercase; }
-.km-arab { font-family: "Amiri", serif; direction: rtl; }
+.km-serif { font-family: var(--ff-serif); }
+/* judul bagian: serif miring tipis (lebih mudah dibaca daripada kaligrafi, selaras video referensi) */
+.km-script { font-family: var(--ff-serif); font-style: italic; font-weight: 400; letter-spacing: .01em; }
+.km-amp { font-family: var(--ff-serif); font-style: italic; font-weight: 400; }
+.km-caps { font-family: var(--ff-caps); letter-spacing: .26em; text-transform: uppercase; }
+.km-arab { font-family: var(--ff-arab); direction: rtl; }
 .km-emas {
   background: linear-gradient(180deg, #fff0c2 0%, #f2c66a 45%, #d7953e 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
@@ -47,7 +51,7 @@
 .km-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   min-height: 46px; padding: 0 22px; border-radius: 999px; border: 0;
-  font-family: "Lato", sans-serif; font-weight: 700; font-size: .88em; letter-spacing: .02em;
+  font-family: var(--ff-sans); font-weight: 700; font-size: .88em; letter-spacing: .02em;
   cursor: pointer; text-decoration: none;
 }
 .km-btn:disabled { opacity: .55; cursor: not-allowed; }
@@ -85,29 +89,77 @@
 .km-terbang { animation: km-terbang 2.2s cubic-bezier(.2, .7, .2, 1) both; }
 @keyframes km-terbang { from { transform: translateY(300px) scale(.7); opacity: 0; } to { transform: none; opacity: 1; } }
 
-/* ---------- sampul (cover) & urutan pembuka ----------
-   Urutan (detik sejak "Buka Undangan"):
-   0.0  isi sampul memudar          0.15–1.75  kamera mendekat ke gerbang kastil
-   1.2  gerbang close-up muncul     1.8–3.1    dua daun pintu terbuka, cahaya keluar
-   2.65 kamera masuk melewati pintu 3.05–4.05  kilau cahaya → aula (hero) */
+/* ---------- sampul (cover): intro sinematik + urutan pembuka ----------
+   INTRO (otomatis saat halaman dibuka, ±6 dtk, ketuk layar = lewati):
+     0.0–5.2  kamera mundur dari puncak kastil + bulan (lapisan bergerak beda kecepatan)
+     0.5–4.9  jembatan & sungai naik dari bawah      1.0–4.8  hamparan bunga naik
+     1.5–4.9  dedaunan berlampion turun dari pojok   3.4–4.6  latar meredup
+     3.5–5.9  "The Wedding of" + nama muncul huruf demi huruf, tanggal, kartu tamu, tombol
+   BUKA UNDANGAN (±4 dtk, ada tombol Lewati):
+     0.0–1.3  kamera maju ke gerbang: bunga/daun/jembatan melintas keluar layar
+     0.85–1.45 gerbang close-up larut masuk (lingkaran dari tengah gerbang)
+     1.5–2.8  dua daun pintu terbuka, cahaya keluar   2.45–3.95 masuk aula, kilau cahaya */
 .km-tetap { position: fixed; top: 0; bottom: 0; left: 50%; width: var(--lebar); transform: translateX(-50%); z-index: 40; }
-.km-sampul { overflow: hidden; color: #fbf1e1; font-family: "Lato", sans-serif; background: #0b0910; }
+.km-sampul { overflow: hidden; color: #fbf1e1; font-family: var(--ff-sans); background: #140b30; }
 /* kotak 390x844 yang menutupi layar — ukurannya sama persis dengan hero */
 .km-kotak { position: absolute; top: 0; left: 50%; height: max(100%, calc(844 * var(--u))); aspect-ratio: 390 / 844; translate: -50% 0; }
 .km-kotak > img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
 
-.km-kamera { transform-origin: 50% 52.1%; will-change: transform; }
-.km-kamera::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10, 14, 36, .45) 0%, rgba(10, 14, 36, 0) 24%, rgba(10, 14, 36, 0) 58%, rgba(8, 14, 24, .9) 82%); }
+/* lapisan adegan luar */
+.km-l { position: absolute; transform-origin: var(--o-intro); will-change: transform; }
+.km-l > img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.km-l-redup { background: radial-gradient(ellipse 90% 46% at 50% 55%, rgba(22, 10, 50, .8) 0%, rgba(22, 10, 50, .5) 55%, rgba(22, 10, 50, 0) 100%), linear-gradient(180deg, rgba(22, 10, 50, .25), rgba(22, 10, 50, 0) 40%); opacity: 1; }
+.km-l-daun-kiri > img { transform-origin: 6% 0; animation: km-ayun-daun 6.5s ease-in-out infinite alternate; }
+.km-l-daun-kanan > img { transform-origin: 94% 0; animation: km-ayun-daun 7.2s ease-in-out infinite alternate-reverse; }
+.km-l-bunga > img { transform-origin: 50% 100%; animation: km-ayun-bunga 8s ease-in-out infinite alternate; }
+.km-l-kabut > img { animation: km-kabut 17s ease-in-out infinite alternate; }
+@keyframes km-ayun-daun { from { transform: rotate(-1.4deg); } to { transform: rotate(1.4deg); } }
+@keyframes km-ayun-bunga { from { transform: skewX(-.8deg) scaleY(1); } to { transform: skewX(.8deg) scaleY(1.012); } }
+@keyframes km-kabut { from { transform: translateX(-3.5%); } to { transform: translateX(3.5%); } }
+
+/* intro: keadaan akhir = gaya dasar; animasi hanya mengisi keadaan awal (fill backwards) */
+.km-tertutup .km-l-langit { animation: km-i-langit 5.2s cubic-bezier(.33, 0, .2, 1) backwards; }
+.km-tertutup .km-l-kastil { animation: km-i-kastil 5.2s cubic-bezier(.33, 0, .2, 1) backwards; }
+.km-tertutup .km-l-air { animation: km-i-air 5.2s cubic-bezier(.33, 0, .2, 1) backwards; }
+.km-tertutup .km-l-kabut { animation: km-i-kabut 5.4s cubic-bezier(.33, 0, .2, 1) backwards; }
+.km-tertutup .km-l-jembatan { animation: km-i-jembatan 4.4s .5s cubic-bezier(.25, .1, .2, 1) backwards; }
+.km-tertutup .km-l-bunga { animation: km-i-bunga 3.8s 1s cubic-bezier(.22, .1, .2, 1) backwards; }
+.km-tertutup .km-l-daun-kiri { animation: km-i-daun-kiri 3.4s 1.5s cubic-bezier(.22, .1, .2, 1) backwards; }
+.km-tertutup .km-l-daun-kanan { animation: km-i-daun-kanan 3.4s 1.5s cubic-bezier(.22, .1, .2, 1) backwards; }
+.km-tertutup .km-l-redup { animation: km-i-redup 1.2s 3.4s ease backwards; }
+@keyframes km-i-langit { from { transform: scale(1.3) translateY(3%); } }
+@keyframes km-i-kastil { from { transform: scale(1.85) translateY(7%); } }
+@keyframes km-i-air { from { transform: scale(1.85) translateY(8%); } }
+@keyframes km-i-kabut { from { transform: scale(1.85) translateY(7%); } }
+@keyframes km-i-jembatan { from { transform: translateY(75%) scale(1.5); } }
+@keyframes km-i-bunga { from { transform: translateY(90%) scale(1.3); } }
+@keyframes km-i-daun-kiri { from { transform: translate(-45%, -70%) rotate(-10deg); } }
+@keyframes km-i-daun-kanan { from { transform: translate(45%, -70%) rotate(10deg); } }
+@keyframes km-i-redup { from { opacity: 0; } }
+
+/* teks intro */
+.km-sampul-isi { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 24px; padding: 10svh 24px 12svh; text-align: center; }
+.km-sampul-judul { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.km-nama-sampul { font-family: var(--ff-serif); font-weight: 300; line-height: 1.02; letter-spacing: .01em; color: #fff8f0; text-shadow: 0 0 22px rgba(206, 178, 255, .55), 0 2px 12px rgba(16, 6, 40, .85); display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.km-huruf { display: inline-block; }
+.km-tertutup .km-huruf { animation: km-huruf 1s cubic-bezier(.2, .6, .3, 1) backwards; }
+@keyframes km-huruf { from { opacity: 0; transform: translateY(10px); filter: blur(8px); } }
+.km-tertutup .km-muncul-intro { animation: km-muncul-intro .9s ease-out backwards; }
+@keyframes km-muncul-intro { from { opacity: 0; transform: translateY(14px); } }
+.km-sampul-tamu { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; text-shadow: 0 1px 8px rgba(16, 6, 40, .9); }
+.km-catatan-privat { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #e6dcf5; padding: 4px 12px; border-radius: 999px; background: rgba(20, 10, 46, .5); }
+.km-nama-tamu { min-width: 240px; max-width: 320px; padding: 8px 18px; border-radius: 14px; background: rgba(24, 12, 54, .58); border: 1px solid rgba(246, 213, 142, .6); font-size: 23px; font-weight: 600; color: #fbf1e1; text-shadow: none; }
+/* ketuk layar saat intro = langsung ke akhir intro */
+.km-tertutup.km-intro-lewat .km-l, .km-tertutup.km-intro-lewat .km-huruf, .km-tertutup.km-intro-lewat .km-muncul-intro { animation-delay: -30s !important; }
 .km-sampul-lampion { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.km-sudut-tl { position: absolute; top: 10px; left: 10px; width: 120px; }
-.km-sudut-br { position: absolute; bottom: 10px; right: 10px; width: 120px; transform: rotate(180deg); }
-.km-sampul-isi { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 54px 26px 30px; text-align: center; }
 .km-segel { width: 38px; height: 38px; border-radius: 50%; background: #7a4632; display: flex; align-items: center; justify-content: center; }
 .km-tertutup .km-segel { animation: km-napas 2.6s ease-in-out infinite; }
 @keyframes km-napas { 0%, 100% { box-shadow: 0 0 0 0 rgba(246, 213, 142, .55); } 50% { box-shadow: 0 0 0 9px rgba(246, 213, 142, 0); } }
 
 /* gerbang close-up */
-.km-buka-gerbang { opacity: 0; transform-origin: 50% 35.55%; will-change: transform, opacity; }
+.km-buka-gerbang { opacity: 0; transform-origin: 50% 35.55%; will-change: transform, opacity;
+  -webkit-mask-image: radial-gradient(closest-side, #000 70%, transparent 100%); mask-image: radial-gradient(closest-side, #000 70%, transparent 100%);
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: 50% 54%; mask-position: 50% 54%; -webkit-mask-size: 360% 240%; mask-size: 360% 240%; }
 .km-gerbang-isi { position: absolute; inset: 0; transform-origin: 50% 54.1%; perspective: calc(620 * var(--u)); perspective-origin: 50% 54%; }
 .km-gerbang-latar { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
 .km-daun { position: absolute; top: 26.4218%; width: 27.4359%; height: 55.3318%; will-change: transform; }
@@ -119,39 +171,53 @@
 /* aula di balik pintu */
 .km-buka-aula { transform: scale(.78); transform-origin: 50% 77.55%; will-change: transform; }
 .km-kilat { position: absolute; inset: 0; opacity: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 34%, #fffdf6 0%, rgba(255, 236, 200, .92) 38%, rgba(255, 206, 140, .75) 100%); }
-
-.km-membuka .km-sampul-isi { animation: km-pudar .5s ease forwards; }
-@keyframes km-pudar { to { opacity: 0; transform: scale(.94); } }
-.km-membuka .km-sudut-tl { animation: km-tl .8s .1s ease-in forwards; }
-@keyframes km-tl { to { transform: translate(-140px, -140px); opacity: 0; } }
-.km-membuka .km-sudut-br { animation: km-br .8s .1s ease-in forwards; }
-@keyframes km-br { from { transform: rotate(180deg); } to { transform: translate(140px, 140px) rotate(180deg); opacity: 0; } }
-.km-membuka .km-sampul-lampion { animation: km-hilang .7s .25s ease forwards; }
-.km-membuka .km-kamera { animation: km-kamera 1.6s .15s cubic-bezier(.5, 0, .85, .35) forwards, km-hilang .45s 1.3s ease-in forwards; }
-.km-membuka .km-kamera::after { animation: km-hilang .5s ease forwards; }
-@keyframes km-kamera { to { transform: scale(7); } }
-@keyframes km-hilang { to { opacity: 0; } }
-.km-membuka .km-buka-gerbang { animation: km-tampil .5s 1.2s ease-out forwards, km-dorong 1.5s 2.65s cubic-bezier(.55, 0, .85, .5) forwards; }
-@keyframes km-tampil { to { opacity: 1; } }
-@keyframes km-dorong { 0% { transform: none; opacity: 1; } 45% { opacity: 1; } 85% { opacity: 0; } 100% { transform: scale(4.5); opacity: 0; } }
-.km-membuka .km-gerbang-isi { animation: km-gerbang-dekat .8s 1.2s cubic-bezier(.2, .6, .35, 1) both; }
-@keyframes km-gerbang-dekat { from { transform: translateY(-3.3%) scale(.78); } to { transform: none; } }
-.km-membuka .km-daun-kiri { animation: km-daun-kiri 1.3s 1.65s cubic-bezier(.45, 0, .2, 1) forwards; }
-.km-membuka .km-daun-kanan { animation: km-daun-kanan 1.3s 1.65s cubic-bezier(.45, 0, .2, 1) forwards; }
-@keyframes km-daun-kiri { 0% { transform: none; } 14% { transform: rotateY(5deg); } 100% { transform: rotateY(84deg); filter: brightness(.55); } }
-@keyframes km-daun-kanan { 0% { transform: none; } 14% { transform: rotateY(-5deg); } 100% { transform: rotateY(-84deg); filter: brightness(.55); } }
-.km-membuka .km-celah { animation: km-celah 1.2s 1.15s ease forwards; }
-@keyframes km-celah { 0% { opacity: .3; } 40% { opacity: 1; } 70% { opacity: .75; } 100% { opacity: 0; } }
-.km-membuka .km-buka-sinar { animation: km-sinar 2.2s 1.7s ease forwards; }
-@keyframes km-sinar { 0% { opacity: 0; } 25% { opacity: .95; } 55% { opacity: .5; } 100% { opacity: .2; } }
-.km-membuka .km-buka-aula { animation: km-aula-masuk 1.05s 2.65s cubic-bezier(.2, .6, .3, 1) forwards; }
-@keyframes km-aula-masuk { from { transform: scale(.78); } to { transform: none; } }
-.km-membuka .km-kilat { animation: km-kilat .9s 2.95s ease forwards; }
-@keyframes km-kilat { 0% { opacity: 0; } 40% { opacity: .7; } 100% { opacity: 0; } }
-/* gradasi bawah yang sama dengan hero, supaya perpindahan ke halaman tidak terasa */
 .km-gradasi-bawah { position: absolute; left: 0; right: 0; bottom: 0; height: 440px; pointer-events: none; background: linear-gradient(180deg, rgba(14, 10, 18, 0), rgba(14, 11, 24, .6) 30%, rgba(14, 12, 28, .86) 56%, #0f1530 100%); }
 .km-buka-gradasi { opacity: 0; }
-.km-membuka .km-buka-gradasi { animation: km-tampil .7s 3.3s ease forwards; }
+
+/* layar link terkunci (lewat batas perangkat) */
+.km-kunci { z-index: 45; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 32px 28px; text-align: center; color: #fbf1e1;
+  background: radial-gradient(ellipse at 50% 30%, #3a2470 0%, #1b1240 55%, #0e0824 100%); }
+
+/* --- urutan Buka Undangan --- */
+.km-membuka .km-sampul-isi { animation: km-pudar .45s ease forwards; }
+@keyframes km-pudar { to { opacity: 0; transform: scale(.96); } }
+.km-membuka .km-sampul-lampion { animation: km-hilang .7s .25s ease forwards; }
+.km-membuka .km-l { transform-origin: var(--o-masuk); }
+.km-membuka .km-l-langit { animation: km-m-langit 1.3s cubic-bezier(.5, 0, .85, .45) forwards; }
+.km-membuka .km-l-kastil { animation: km-m-kastil 1.3s cubic-bezier(.5, 0, .85, .45) forwards; }
+.km-membuka .km-l-air { animation: km-m-air 1.3s cubic-bezier(.5, 0, .85, .45) forwards; }
+.km-membuka .km-l-kabut { animation: km-m-kabut 1.3s cubic-bezier(.5, 0, .85, .45) forwards; }
+.km-membuka .km-l-jembatan { animation: km-m-jembatan 1.2s cubic-bezier(.5, 0, .85, .45) forwards; }
+.km-membuka .km-l-redup { animation: km-hilang .5s ease forwards; }
+.km-membuka .km-l-daun-kiri, .km-membuka .km-l-daun-kanan { animation: km-m-depan 1.05s cubic-bezier(.5, 0, .85, .45) forwards; }
+.km-membuka .km-l-bunga { animation: km-m-depan 1s cubic-bezier(.5, 0, .85, .45) forwards; }
+.km-membuka .km-luar { animation: km-hilang .3s 1.2s ease forwards; }
+@keyframes km-m-langit { to { transform: scale(1.7); } }
+@keyframes km-m-kastil { to { transform: scale(3.6); } }
+@keyframes km-m-air { 70% { opacity: 1; } to { transform: scale(3.8); opacity: 0; } }
+@keyframes km-m-kabut { to { transform: scale(4.2); opacity: 0; } }
+@keyframes km-m-jembatan { 55% { opacity: 1; } to { transform: scale(5); opacity: 0; } }
+@keyframes km-m-depan { 50% { opacity: 1; } to { transform: scale(6); opacity: 0; } }
+@keyframes km-hilang { to { opacity: 0; } }
+@keyframes km-tampil { to { opacity: 1; } }
+.km-membuka .km-buka-gerbang { animation: km-larut .6s .85s cubic-bezier(.3, .5, .4, 1) both, km-dorong 1.5s 2.45s cubic-bezier(.55, 0, .85, .5) forwards; }
+@keyframes km-larut { from { opacity: 1; -webkit-mask-size: 14% 9%; mask-size: 14% 9%; } to { opacity: 1; -webkit-mask-size: 360% 240%; mask-size: 360% 240%; } }
+@keyframes km-dorong { 0% { transform: none; opacity: 1; } 45% { opacity: 1; } 85% { opacity: 0; } 100% { transform: scale(4.5); opacity: 0; } }
+.km-membuka .km-gerbang-isi { animation: km-gerbang-dekat .65s .85s cubic-bezier(.2, .6, .35, 1) both; }
+@keyframes km-gerbang-dekat { from { transform: translateY(-2.4%) scale(.32); } to { transform: none; } }
+.km-membuka .km-daun-kiri { animation: km-daun-kiri 1.3s 1.5s cubic-bezier(.45, 0, .2, 1) forwards; }
+.km-membuka .km-daun-kanan { animation: km-daun-kanan 1.3s 1.5s cubic-bezier(.45, 0, .2, 1) forwards; }
+@keyframes km-daun-kiri { 0% { transform: none; } 14% { transform: rotateY(5deg); } 100% { transform: rotateY(84deg); filter: brightness(.55); } }
+@keyframes km-daun-kanan { 0% { transform: none; } 14% { transform: rotateY(-5deg); } 100% { transform: rotateY(-84deg); filter: brightness(.55); } }
+.km-membuka .km-celah { animation: km-celah 1.2s 1s ease forwards; }
+@keyframes km-celah { 0% { opacity: .3; } 40% { opacity: 1; } 70% { opacity: .75; } 100% { opacity: 0; } }
+.km-membuka .km-buka-sinar { animation: km-sinar 2.2s 1.55s ease forwards; }
+@keyframes km-sinar { 0% { opacity: 0; } 25% { opacity: .95; } 55% { opacity: .5; } 100% { opacity: .2; } }
+.km-membuka .km-buka-aula { animation: km-aula-masuk 1.05s 2.45s cubic-bezier(.2, .6, .3, 1) forwards; }
+@keyframes km-aula-masuk { from { transform: scale(.78); } to { transform: none; } }
+.km-membuka .km-kilat { animation: km-kilat .9s 2.75s ease forwards; }
+@keyframes km-kilat { 0% { opacity: 0; } 40% { opacity: .7; } 100% { opacity: 0; } }
+.km-membuka .km-buka-gradasi { animation: km-tampil .7s 3.1s ease forwards; }
 
 /* ---------- hero: aula di dalam kastil ---------- */
 .km-hero { position: relative; height: max(100svh, calc(844 * var(--u))); overflow: hidden; background: #0b0910; }
@@ -179,6 +245,8 @@
 .km-hero-teks { position: absolute; left: 0; right: 0; bottom: 64px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 0 24px; }
 .km-hero-teks { text-shadow: 0 1px 12px rgba(8, 6, 16, .95), 0 0 2px rgba(8, 6, 16, .6); }
 .km-hero-teks .km-emas { text-shadow: none; }
+.km-hero-teks h1.km-nama-hero { filter: none; }
+.km-nama-hero { margin: 0; padding: 0 6px; font-family: var(--ff-serif); font-weight: 300; font-size: 3.4em; line-height: 1.05; color: #fff8f0; text-shadow: 0 0 20px rgba(206, 178, 255, .5), 0 2px 10px rgba(10, 6, 20, .8); }
 .km-hero-teks h1 { filter: drop-shadow(0 2px 8px rgba(8, 6, 16, .85)) drop-shadow(0 0 22px rgba(8, 6, 16, .6)); }
 .km-masuk .km-hero-teks { animation: km-muncul 1.1s .2s ease-out both; }
 @keyframes km-muncul { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
@@ -217,6 +285,7 @@
 @media (prefers-reduced-motion: reduce) {
   .km *, .km-tetap *, .km-nav, .km-pojok * { animation-duration: .01s !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; }
   .km-lan, .km-kunang, .km-kelopak { display: none; }
+  .km-l > img { animation: none !important; }
 }
 @media (min-width: 481px) {
   .km-halaman { background: radial-gradient(ellipse at top, #1a2148 0%, #070b18 60%); }

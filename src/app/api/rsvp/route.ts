@@ -10,6 +10,7 @@ const Skema = z.object({
   jumlah: z.number().int().min(0).max(20),
   pesan: z.string().trim().max(500, "Ucapan maksimal 500 karakter."),
   turnstile: z.string().optional(),
+  perangkat: z.string().regex(/^[a-zA-Z0-9-]{8,64}$/).nullable().optional(),
 });
 
 export async function POST(request: Request) {
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Verifikasi anti-spam gagal. Muat ulang halaman lalu coba lagi." }, { status: 403 });
   }
   try {
-    const ucapan = await kirimRsvp({ slug: d.slug, kode: d.kode, nama: d.nama, kehadiran: d.kehadiran, jumlah: d.jumlah, pesan: d.pesan });
+    const ucapan = await kirimRsvp({ slug: d.slug, kode: d.kode, nama: d.nama, kehadiran: d.kehadiran, jumlah: d.jumlah, pesan: d.pesan, perangkat: d.perangkat ?? null });
     const ringkasan = await ringkasanKehadiran(d.slug);
     return Response.json({ ucapan, ringkasan }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {

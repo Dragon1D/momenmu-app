@@ -4,7 +4,7 @@
   "waktu_acara": "2027-04-03T19:00:00+07:00",
   "batas_rsvp": "2027-03-27T23:59:00+07:00",
   "aktif_sampai": "2027-07-03T23:59:00+07:00",
-  "izinkan_tanpa_kode": true,
+  "izinkan_tanpa_kode": false,
   "konten": {
     "mempelai": {
       "pria": {

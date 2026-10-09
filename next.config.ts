@@ -8,6 +8,15 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // Keamanan dasar untuk semua halaman (dashboard tidak bisa ditanam di situs lain, dsb.)
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        ],
+      },
+      {
         // Halaman undangan pribadi: jangan diindeks mesin pencari.
         source: "/:slug/:path*",
         headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" }],

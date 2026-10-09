@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./kastil.css";
-import type { Ringkasan, Ucapan, Undangan } from "@/lib/tipe";
+import type { Hadiah, Ringkasan, Ucapan, Undangan } from "@/lib/tipe";
+import { idPerangkat } from "@/lib/perangkat";
 import { bagianTanggal, buatLampion, linkKalender, rentangJam, tanggalSingkat, acak } from "@/lib/format";
 import { IkonBawah, IkonGembok, IkonHati, IkonInstagram, IkonKado, IkonKalender, IkonKanan, IkonKiri, IkonLampion, IkonPeta, IkonRumah, IkonFoto, IkonSalin, IkonTutup } from "@/components/ikon";
 import LangitDoa from "./LangitDoa";
@@ -17,9 +18,9 @@ interface Props {
   siteKeyTurnstile?: string;
 }
 
-type Fase = "tertutup" | "membuka" | "terbuka";
+type Fase = "tertutup" | "membuka" | "terbuka" | "terkunci";
 
-const LAMPION_SAMPUL = buatLampion(9, 3, 20, 54);
+const LAMPION_SAMPUL = buatLampion(14, 3, 16, 50);
 const LAMPION_PENUTUP = buatLampion(6, 11, 18, 44);
 const SEMBURAN = (() => {
   const r = acak(19);
@@ -37,9 +38,47 @@ const KELOPAK = (() => {
   return Array.from({ length: 14 }, (_, i) => ({ x: `${(2 + r() * 94).toFixed(1)}%`, w: Math.round(7 + r() * 6), d: `${(-r() * 12).toFixed(1)}s`, dur: `${(8 + r() * 6).toFixed(1)}s`, warna: warna[i % warna.length], ayun: `${Math.round(12 + r() * 26)}px` }));
 })();
 
-// Urutan pembuka (ms sejak tombol ditekan): kamera mendekat ke gerbang → pintu terbuka → masuk aula.
-const DURASI_PEMBUKA = 4150;
+// ---------------------------------------------------------------------------
+// Adegan luar (intro) berlapis — posisi dalam % kotak desain 390x844.
+// Intro: kamera mundur dari puncak kastil (seperti video referensi).
+// Buka Undangan: kamera maju ke gerbang → pintu terbuka → masuk aula.
+// ---------------------------------------------------------------------------
+const F_INTRO = { x: 50, y: 27.96 }; // fokus awal kamera: puncak kastil
+const F_GERBANG = { x: 50, y: 51.66 }; // gerbang kastil
+interface Lapis { id: string; src?: string; alt?: string; l: number; t: number; w: number; h: number }
+const LAPIS: Lapis[] = [
+  { id: "langit", src: "/tema/kastil/intro/langit.webp", l: 0, t: 0, w: 100, h: 100 },
+  { id: "air", src: "/tema/kastil/intro/air.webp", l: -5.1282, t: 53.5545, w: 110.2564, h: 46.4455 },
+  { id: "kastil", src: "/tema/kastil/intro/kastil.webp", alt: "Ilustrasi kastil bercahaya di bawah bulan purnama", l: 3.8462, t: 20.1422, w: 92.3077, h: 37.6777 },
+  { id: "kabut", src: "/tema/kastil/intro/kabut.webp", l: -10.2564, t: 45.0237, w: 120.5128, h: 26.0664 },
+  { id: "jembatan", src: "/tema/kastil/intro/jembatan.webp", l: -5.1282, t: 61.6114, w: 110.2564, h: 35.545 },
+  { id: "redup", l: 0, t: 0, w: 100, h: 100 },
+  { id: "daun-kiri", src: "/tema/kastil/intro/daun-kiri.webp", l: -2.5641, t: -1.1848, w: 58.9744, h: 42.654 },
+  { id: "daun-kanan", src: "/tema/kastil/intro/daun-kanan.webp", l: 43.5897, t: -1.1848, w: 58.9744, h: 42.654 },
+  { id: "bunga", src: "/tema/kastil/intro/bunga.webp", l: -10.2564, t: 71.564, w: 120.5128, h: 31.9905 },
+];
+const asal = (f: { x: number; y: number }, L: Lapis) => `${(((f.x - L.l) / L.w) * 100).toFixed(2)}% ${(((f.y - L.t) / L.h) * 100).toFixed(2)}%`;
+const KUNANG_SAMPUL = (() => {
+  const r = acak(91);
+  return Array.from({ length: 12 }, () => ({ x: `${(4 + r() * 92).toFixed(1)}%`, y: 470 + r() * 300, d: `${(-r() * 6).toFixed(1)}s`, dur: `${(4.5 + r() * 4).toFixed(1)}s` }));
+})();
+
+const DURASI_INTRO = 6400; // ms sampai tombol Buka Undangan siap
+const DURASI_PEMBUKA = 3950; // ms sejak tombol ditekan sampai isi undangan tampil
 const GAMBAR_PEMBUKA = ["/tema/kastil/gerbang-latar.webp", "/tema/kastil/pintu-kiri.webp", "/tema/kastil/pintu-kanan.webp", "/tema/kastil/aula.webp"];
+
+/** Pecah teks jadi huruf-huruf yang muncul bergantian (efek nama di video referensi). */
+function Huruf({ teks, mulai }: { teks: string; mulai: number }) {
+  return (
+    <>
+      {Array.from(teks).map((ch, i) => (
+        <span key={i} className="km-huruf" style={{ animationDelay: `${(mulai + i * 0.07).toFixed(2)}s` }} aria-hidden="true">
+          {ch === " " ? "\u00a0" : ch}
+        </span>
+      ))}
+    </>
+  );
+}
 
 function Lampion({ l }: { l: { x: string; w: number; dur: string; delay: string; op: number } }) {
   return (
@@ -50,9 +89,12 @@ function Lampion({ l }: { l: { x: string; w: number; dur: string; delay: string;
 }
 
 export default function TemaKastil({ undangan, ucapanAwal, ringkasanAwal, sudahLewat, rsvpDitutup, siteKeyTurnstile }: Props) {
-  const { konten, tamu, hadiah, slug } = undangan;
+  const { konten, tamu, slug } = undangan;
   const { pria, wanita } = konten.mempelai;
   const [fase, setFase] = useState<Fase>("tertutup");
+  const [introSelesai, setIntroSelesai] = useState(false);
+  const [hadiah, setHadiah] = useState<Hadiah | null>(null);
+  const [statusHadiah, setStatusHadiah] = useState<"belum" | "memuat" | "siap" | "gagal">("belum");
   const [teksBesar, setTeksBesar] = useState(false);
   const [musik, setMusik] = useState(false);
   const [lightbox, setLightbox] = useState<number | null>(null);
@@ -109,6 +151,13 @@ export default function TemaKastil({ undangan, ucapanAwal, ringkasanAwal, sudahL
     if (toastTimer.current) clearTimeout(toastTimer.current);
   }, []);
 
+  // intro berjalan sendiri; setelah selesai (atau dilewati), tombol Buka Undangan aktif
+  useEffect(() => {
+    const kurangGerak = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const t = setTimeout(() => setIntroSelesai(true), kurangGerak ? 0 : DURASI_INTRO);
+    return () => clearTimeout(t);
+  }, []);
+
   // siapkan (decode) gambar gerbang & aula sejak awal supaya animasi pembuka tidak tersendat
   useEffect(() => {
     GAMBAR_PEMBUKA.forEach((src) => {
@@ -123,7 +172,24 @@ export default function TemaKastil({ undangan, ucapanAwal, ringkasanAwal, sudahL
       setFase("membuka");
       window.scrollTo(0, 0);
       if (tamu) {
-        fetch("/api/dibuka", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slug, kode: tamu.kode }), keepalive: true }).catch(() => {});
+        const perangkat = idPerangkat();
+        setStatusHadiah("memuat");
+        fetch("/api/dibuka", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slug, kode: tamu.kode, perangkat }), keepalive: true })
+          .then((r) => r.json())
+          .then((d: { terkunci?: boolean }) => {
+            if (d.terkunci) {
+              if (timer.current) clearTimeout(timer.current);
+              setFase("terkunci");
+              return;
+            }
+            return fetch("/api/hadiah", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slug, kode: tamu.kode, perangkat }) })
+              .then((r) => r.json())
+              .then((h: { hadiah: Hadiah | null }) => {
+                setHadiah(h.hadiah);
+                setStatusHadiah("siap");
+              });
+          })
+          .catch(() => setStatusHadiah("gagal"));
       }
       if (audio.current) {
         audio.current.volume = 0;
@@ -166,6 +232,18 @@ export default function TemaKastil({ undangan, ucapanAwal, ringkasanAwal, sudahL
   }
 
   const terkunci = fase !== "terbuka";
+  const adaHadiah = !!hadiah && ((hadiah.rekening?.length ?? 0) > 0 || !!hadiah.alamat);
+  const sembunyikanHadiah = !!tamu && statusHadiah === "siap" && !adaHadiah;
+  const ukuranNama = Math.min(54, Math.floor(330 / (0.5 * Math.max(pria.panggilan.length, wanita.panggilan.length, 4))));
+  const mulaiWanita = 3.9 + pria.panggilan.length * 0.07 + 0.35;
+
+  function lewatiIntro(e: React.MouseEvent) {
+    if (!introSelesai) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIntroSelesai(true);
+    }
+  }
 
   return (
     <div className={`km-halaman ${teksBesar ? "km-teks-besar" : ""} ${terkunci ? "km-terkunci" : ""}`}>
@@ -186,8 +264,8 @@ export default function TemaKastil({ undangan, ucapanAwal, ringkasanAwal, sudahL
           ))}
           <div className="km-gradasi-bawah" />
           <div className="km-hero-teks">
-            <div className="km-caps" style={{ fontSize: ".7em", color: "#F6D58E" }}>The Wedding of</div>
-            <h1 className="km-script km-emas" style={{ margin: 0, fontSize: "4.2em", lineHeight: 1.15, padding: "0 6px" }}>{pria.panggilan} &amp; {wanita.panggilan}</h1>
+            <div className="km-caps" style={{ fontSize: ".75em", color: "#F6D58E" }}>The Wedding of</div>
+            <h1 className="km-nama-hero">{pria.panggilan} <span className="km-amp km-emas">&amp;</span> {wanita.panggilan}</h1>
             <img src="/tema/bersama/pembatas-emas.svg" alt="" style={{ width: 220 }} />
             <div className="km-caps" style={{ fontSize: ".8em" }}>{singkat}</div>
             {konten.tagline && <p className="km-serif" style={{ margin: "4px 0 0", fontSize: "1.1em", fontStyle: "italic", color: "#E6DDF0" }}>“{konten.tagline}”</p>}
@@ -364,6 +442,7 @@ export default function TemaKastil({ undangan, ucapanAwal, ringkasanAwal, sudahL
         <LangitDoa slug={slug} tamu={tamu} ucapanAwal={ucapanAwal} ringkasanAwal={ringkasanAwal} rsvpDitutup={rsvpDitutup} siteKeyTurnstile={siteKeyTurnstile} onToast={tampilkanToast} />
 
         {/* ================= TANDA KASIH ================= */}
+        {!sembunyikanHadiah && (
         <section id="hadiah" className="km-section km-malam" style={{ display: "flex", flexDirection: "column", gap: 18, textAlign: "center" }}>
           <div className="km-judul km-muncul">
             <div className="km-caps">Wedding Gift</div>
@@ -372,7 +451,11 @@ export default function TemaKastil({ undangan, ucapanAwal, ringkasanAwal, sudahL
           </div>
           {!hadiah ? (
             <div className="km-kaca" style={{ padding: 18, fontSize: ".86em", color: "#E6DDF0" }}>
-              Detail tanda kasih tersedia di link undangan pribadi yang kami kirimkan kepada Anda.
+              {!tamu
+                ? "Detail tanda kasih tersedia di link undangan pribadi yang kami kirimkan kepada Anda."
+                : statusHadiah === "gagal"
+                  ? "Detail tanda kasih belum bisa dimuat. Muat ulang halaman ini."
+                  : "Memuat detail tanda kasih…"}
             </div>
           ) : (
             <>
@@ -384,10 +467,10 @@ export default function TemaKastil({ undangan, ucapanAwal, ringkasanAwal, sudahL
                       <svg width="42" height="32" viewBox="0 0 42 32" aria-hidden="true"><rect x="1" y="1" width="40" height="30" rx="6" fill="#E3C08D" stroke="#C9A26B" /><path d="M1 11h12M1 21h12M29 11h12M29 21h12M13 1v30M29 1v30" stroke="#B48B55" strokeWidth="1.2" /></svg>
                       <span className="km-caps" style={{ fontSize: ".8em", color: "#F6D58E" }}>{r.bank}</span>
                     </div>
-                    <div className="km-serif" style={{ fontSize: "1.85em", fontWeight: 600, letterSpacing: ".12em" }}>{r.nomor.replace(/(\d{4})(?=\d)/g, "$1 ")}</div>
+                    <div className="km-serif" style={{ fontSize: "1.85em", fontWeight: 600, letterSpacing: ".12em" }}>{r.nomor.replace(/[\s.-]/g, "").replace(/(\d{4})(?=\d)/g, "$1 ")}</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}><span className="km-muted" style={{ fontSize: ".62em", letterSpacing: ".14em" }}>ATAS NAMA</span><span style={{ fontSize: ".92em", fontWeight: 700 }}>{r.atas_nama}</span></div>
                   </div>
-                  <button type="button" className="km-btn km-btn-garis" onClick={() => salin(r.nomor)} style={{ alignSelf: "center" }}><IkonSalin ukuran={16} />Salin nomor rekening</button>
+                  <button type="button" className="km-btn km-btn-garis" onClick={() => salin(r.nomor.replace(/[\s.-]/g, ""))} style={{ alignSelf: "center" }}><IkonSalin ukuran={16} />Salin nomor rekening</button>
                 </div>
               ))}
               {hadiah.alamat && (
@@ -404,6 +487,7 @@ export default function TemaKastil({ undangan, ucapanAwal, ringkasanAwal, sudahL
             </>
           )}
         </section>
+        )}
 
         {/* ================= TURUT MENGUNDANG ================= */}
         {konten.turut_mengundang && konten.turut_mengundang.length > 0 && (
@@ -438,7 +522,7 @@ export default function TemaKastil({ undangan, ucapanAwal, ringkasanAwal, sudahL
       {fase === "terbuka" && (
         <>
           <div className="km-pojok" style={{ top: 0 }}>
-            <button type="button" className="km-ikon" onClick={() => setTeksBesar((v) => !v)} aria-pressed={teksBesar} aria-label="Perbesar teks" style={{ top: 16, right: 16, fontFamily: "'Cormorant Garamond', serif", fontWeight: 600, fontSize: 19 }}>Aa</button>
+            <button type="button" className="km-ikon" onClick={() => setTeksBesar((v) => !v)} aria-pressed={teksBesar} aria-label="Perbesar teks" style={{ top: 16, right: 16, fontFamily: "var(--ff-serif)", fontWeight: 600, fontSize: 19 }}>Aa</button>
           </div>
           {konten.musik_url && (
             <div className="km-pojok" style={{ bottom: 0 }}>
@@ -472,9 +556,27 @@ export default function TemaKastil({ undangan, ucapanAwal, ringkasanAwal, sudahL
 
       {toast && <div className="km-toast" role="status">{toast}</div>}
 
+      {/* ================= LINK TERKUNCI ================= */}
+      {fase === "terkunci" && (
+        <div className="km-tetap km-kunci" role="alertdialog" aria-labelledby="judul-kunci">
+          <img src="/brand/monogram-cream.png" alt="" style={{ width: 64, opacity: 0.9 }} />
+          <IkonGembok ukuran={28} style={{ color: "#F6D58E" }} />
+          <h2 id="judul-kunci" className="km-serif" style={{ margin: 0, fontSize: 26, fontWeight: 500 }}>Undangan pribadi</h2>
+          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: "#E6DDF0", maxWidth: 320 }}>
+            Link ini sudah dibuka di beberapa perangkat lain. Demi menjaga privasi, setiap undangan hanya untuk tamu yang dituju.
+          </p>
+          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "#CFC6DD", maxWidth: 320 }}>
+            Jika ini perangkat Anda, mohon hubungi mempelai agar link dibuka kembali.
+          </p>
+        </div>
+      )}
+
       {/* ================= SAMPUL (COVER) ================= */}
-      {fase !== "terbuka" && (
-        <div className={`km-tetap km-sampul ${fase === "membuka" ? "km-membuka" : "km-tertutup"}`}>
+      {(fase === "tertutup" || fase === "membuka") && (
+        <div
+          className={`km-tetap km-sampul ${fase === "membuka" ? "km-membuka" : "km-tertutup"} ${introSelesai ? "km-intro-lewat" : ""}`}
+          onClickCapture={fase === "tertutup" ? lewatiIntro : undefined}
+        >
           {/* lapis 1: aula (terlihat dari balik pintu, lalu kamera masuk) */}
           <div className="km-kotak km-buka-aula" aria-hidden="true"><img src="/tema/kastil/aula.webp" alt="" /><div className="km-gradasi-bawah km-buka-gradasi" /></div>
           {/* lapis 2: gerbang close-up dengan dua daun pintu */}
@@ -487,27 +589,41 @@ export default function TemaKastil({ undangan, ucapanAwal, ringkasanAwal, sudahL
               <img className="km-gerbang-latar" src="/tema/kastil/gerbang-latar.webp" alt="" />
             </div>
           </div>
-          {/* lapis 3: kastil dari luar (sampul) — kamera mendekat ke gerbangnya */}
-          <div className="km-kotak km-kamera"><img src="/tema/kastil/sampul.webp" alt="" /></div>
+          {/* lapis 3: adegan luar berlapis (parallax) */}
+          <div className="km-kotak km-luar">
+            {LAPIS.map((L) => (
+              <div
+                key={L.id}
+                className={`km-l km-l-${L.id}`}
+                style={{ left: `${L.l}%`, top: `${L.t}%`, width: `${L.w}%`, height: `${L.h}%`, ["--o-intro" as string]: asal(F_INTRO, L), ["--o-masuk" as string]: asal(F_GERBANG, L) }}
+              >
+                {L.src && <img src={L.src} alt={L.alt ?? ""} fetchPriority={L.id === "langit" || L.id === "kastil" ? "high" : "auto"} />}
+              </div>
+            ))}
+            {KUNANG_SAMPUL.map((k, i) => (
+              <span key={i} className="km-kunang" style={{ left: k.x, top: `${((k.y / 844) * 100).toFixed(2)}%`, animationDelay: k.d, animationDuration: k.dur }} />
+            ))}
+          </div>
           <div className="km-sampul-lampion">{LAMPION_SAMPUL.map((l, i) => <Lampion key={i} l={l} />)}</div>
-          <img className="km-sudut-tl" src="/tema/bersama/sudut-emas.svg" alt="" />
-          <img className="km-sudut-br" src="/tema/bersama/sudut-emas.svg" alt="" />
           <div className="km-sampul-isi">
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, textShadow: "0 2px 14px rgba(10,14,36,.8)" }}>
-              <div className="km-caps" style={{ fontSize: 10, color: "#F6E2C0" }}>The Wedding of</div>
-              <div className="km-script km-emas" style={{ fontSize: 54, lineHeight: 1.15, padding: "0 8px" }}>{pria.panggilan} <span style={{ fontSize: 34 }}>&amp;</span> {wanita.panggilan}</div>
-              <img src="/tema/bersama/pembatas-emas.svg" alt="" style={{ width: 190 }} />
-              <div className="km-caps" style={{ fontSize: 11, color: "#F6E2C0" }}>{singkat}</div>
+            <div className="km-sampul-judul" role="heading" aria-level={1} aria-label={`The Wedding of ${pria.panggilan} dan ${wanita.panggilan}`}>
+              <div className="km-caps km-muncul-intro" style={{ fontSize: 12.5, color: "#F6E9FF", animationDelay: "3.5s" }} aria-hidden="true">The Wedding of</div>
+              <div className="km-nama-sampul" style={{ fontSize: ukuranNama }} aria-hidden="true">
+                <div><Huruf teks={pria.panggilan} mulai={3.9} /></div>
+                <div className="km-amp km-emas km-muncul-intro" style={{ fontSize: Math.round(ukuranNama * 0.62), lineHeight: 1, padding: "0 .15em", animationDelay: `${(mulaiWanita - 0.2).toFixed(2)}s` }}>&amp;</div>
+                <div><Huruf teks={wanita.panggilan} mulai={mulaiWanita} /></div>
+              </div>
+              <div className="km-caps km-muncul-intro" style={{ fontSize: 13, color: "#F3E8FF", animationDelay: "5.1s" }} aria-hidden="true">{singkat}</div>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, width: "100%" }}>
-              <div style={{ fontSize: 12, color: "#E6DDF0" }}>Kepada Yth. Bapak/Ibu/Saudara/i</div>
-              <div className="km-serif" style={{ minWidth: 240, maxWidth: 320, padding: "8px 18px", borderRadius: 14, background: "rgba(10,14,36,.55)", border: "1px solid rgba(246,213,142,.6)", fontSize: 23, fontWeight: 600, color: "#FBF1E1" }}>{tamu?.nama ?? "Tamu Undangan"}</div>
-              {tamu && <div className="km-muted" style={{ fontSize: 10.5 }}>Mohon maaf apabila ada kesalahan penulisan nama dan gelar</div>}
-              <button type="button" className="km-btn km-btn-emas" onClick={bukaUndangan} style={{ marginTop: 8, minHeight: 52, padding: "0 24px 0 8px", fontSize: 14 }}>
+            <div className="km-sampul-tamu km-muncul-intro" style={{ animationDelay: "5.4s" }}>
+              <div style={{ fontSize: 13, color: "#EDE3FA" }}>Kepada Yth. Bapak/Ibu/Saudara/i</div>
+              <div className="km-serif km-nama-tamu">{tamu?.nama ?? "Tamu Undangan"}</div>
+              {tamu && <div style={{ fontSize: 12, color: "#D9CFEA" }}>Mohon maaf apabila ada kesalahan penulisan nama dan gelar</div>}
+              <button type="button" className="km-btn km-btn-emas km-muncul-intro" onClick={bukaUndangan} style={{ marginTop: 8, minHeight: 52, padding: "0 24px 0 8px", fontSize: 15, animationDelay: "5.8s" }}>
                 <span className="km-segel"><img src="/brand/monogram-cream.png" alt="" style={{ width: 28 }} /></span>
                 Buka Undangan
               </button>
-              <div className="km-muted" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10.5 }}><IkonGembok ukuran={12} />Undangan resmi momenmu.id · tanpa unduh aplikasi</div>
+              <div className="km-catatan-privat"><IkonGembok ukuran={13} />Undangan pribadi · mohon tidak diteruskan</div>
             </div>
           </div>
           <div className="km-kilat" />
@@ -516,7 +632,7 @@ export default function TemaKastil({ undangan, ucapanAwal, ringkasanAwal, sudahL
               {SEMBURAN.map((b, i) => (
                 <div key={i} className="km-semburan" style={{ left: b.x, width: b.w, animationDelay: b.delay }}><img src="/tema/bersama/lampion.svg" alt="" style={{ display: "block", width: "100%" }} /></div>
               ))}
-              <button type="button" onClick={bukaUndangan} className="km-btn" style={{ position: "absolute", top: 16, right: 16, minHeight: 44, padding: "0 16px", border: "1px solid rgba(246,213,142,.6)", background: "rgba(10,14,36,.5)", color: "#F6D58E", fontSize: 13 }}>Lewati</button>
+              <button type="button" onClick={bukaUndangan} className="km-btn" style={{ position: "absolute", top: 16, right: 16, minHeight: 44, padding: "0 16px", border: "1px solid rgba(246,213,142,.6)", background: "rgba(20,10,46,.5)", color: "#F6D58E", fontSize: 13 }}>Lewati</button>
             </>
           )}
         </div>

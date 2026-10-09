@@ -1,6 +1,12 @@
 *, *::before, *::after { box-sizing: border-box; }
+:root {
+  --ff-serif: var(--f-serif), "Cormorant Garamond", Georgia, serif;
+  --ff-caps: var(--f-caps), "Cinzel", Georgia, serif;
+  --ff-sans: var(--f-sans), "Lato", system-ui, sans-serif;
+  --ff-arab: var(--f-arab), "Amiri", serif;
+}
 html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
-body { margin: 0; background: #070b18; color: #fbf1e1; font-family: "Lato", system-ui, sans-serif; }
+body { margin: 0; background: #070b18; color: #fbf1e1; font-family: var(--ff-sans); }
 img { max-width: 100%; }
 button { font: inherit; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }

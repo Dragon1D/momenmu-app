@@ -4,6 +4,7 @@ import Script from "next/script";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { Ringkasan, Tamu, Ucapan } from "@/lib/tipe";
 import { namaDepan, waktuRelatif } from "@/lib/format";
+import { idPerangkat } from "@/lib/perangkat";
 
 const SLOT = [
   { x: "8%", y: 40 }, { x: "38%", y: 18 }, { x: "68%", y: 52 }, { x: "20%", y: 138 },
@@ -86,6 +87,7 @@ export default function LangitDoa({ slug, tamu, ucapanAwal, ringkasanAwal, rsvpD
           jumlah: kehadiran === "hadir" ? jumlah : 0,
           pesan: pesan.trim() || (kehadiran === "hadir" ? "Insya Allah hadir. Selamat untuk kalian berdua!" : "Mohon maaf belum bisa hadir. Doa terbaik untuk kalian!"),
           turnstile: token,
+          perangkat: tamu ? idPerangkat() : null,
         }),
       });
       const data = await res.json();
@@ -201,8 +203,8 @@ export default function LangitDoa({ slug, tamu, ucapanAwal, ringkasanAwal, rsvpD
         <form className="km-kaca" onSubmit={kirim} style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
           <div className="km-serif" style={{ fontSize: "1.3em", fontWeight: 600, color: "#F6D58E" }}>Terbangkan lampion doamu</div>
           <label className="km-label">
-            Nama
-            <input className="km-field" value={nama} onChange={(e) => setNama(e.target.value)} maxLength={80} autoComplete="name" required />
+            {tamu ? "Nama (sesuai undangan)" : "Nama"}
+            <input className="km-field" value={nama} onChange={(e) => setNama(e.target.value)} maxLength={80} autoComplete="name" required readOnly={!!tamu} aria-readonly={!!tamu} style={tamu ? { opacity: 0.8, cursor: "default" } : undefined} />
           </label>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <span style={{ fontSize: ".84em", fontWeight: 700, color: "#E6DDF0" }}>Apakah Anda akan hadir?</span>

@@ -44,9 +44,9 @@ export async function HalamanUndangan({ slug, kode }: { slug: string; kode: stri
   if (!u) notFound();
   if (u === "butuh_kode") {
     return (
-      <main style={{ minHeight: "100svh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center", background: "#0F1530", color: "#FBF1E1", fontFamily: "Lato, sans-serif" }}>
+      <main style={{ minHeight: "100svh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center", background: "#0F1530", color: "#FBF1E1", fontFamily: "var(--ff-sans)" }}>
         <div style={{ maxWidth: 360 }}>
-          <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontWeight: 600 }}>Undangan pribadi</h1>
+          <h1 style={{ fontFamily: "var(--ff-serif)", fontWeight: 600 }}>Undangan pribadi</h1>
           <p>Undangan ini hanya bisa dibuka melalui link pribadi yang dikirimkan kepada Anda.</p>
         </div>
       </main>

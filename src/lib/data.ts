@@ -22,6 +22,7 @@ const PESAN_ERROR: Record<string, [string, number]> = {
   JUMLAH_MELEBIHI_BATAS: ["Jumlah tamu melebihi batas undangan Anda.", 400],
   BUTUH_KODE: ["Undangan ini hanya bisa dibuka lewat link pribadi.", 403],
   TERLALU_BANYAK_PERMINTAAN: ["Terlalu banyak kiriman. Coba lagi sebentar lagi.", 429],
+  PERANGKAT_TIDAK_TERDAFTAR: ["Buka undangan dari perangkat ini terlebih dahulu, lalu coba lagi.", 403],
 };
 
 function errorDari(kode: string): ErrorUndangan {
@@ -57,6 +58,7 @@ interface TamuDemo {
   status: Tamu["status"];
   jumlah_hadir: number | null;
   dibuka_pada: string | null;
+  perangkat: string[];
 }
 interface UcapanDemo extends Ucapan {
   kode: string | null;
@@ -72,7 +74,7 @@ function storeDemo(): StoreDemo {
   if (!g.__momenmuDemo) {
     const sekarang = Date.now();
     g.__momenmuDemo = {
-      tamu: contoh.tamu.map((t) => ({ ...t, status: "baru" as const, jumlah_hadir: null, dibuka_pada: null })),
+      tamu: contoh.tamu.map((t) => ({ ...t, status: "baru" as const, jumlah_hadir: null, dibuka_pada: null, perangkat: [] })),
       ucapan: contoh.ucapan.map((u, i) => ({
         id: `demo-${i}`,
         kode: u.kode,
@@ -106,7 +108,7 @@ function demoAmbil(slug: string, kode?: string | null): Undangan | null {
     batas_rsvp: contoh.batas_rsvp,
     aktif_sampai: contoh.aktif_sampai,
     konten: contoh.konten as Konten,
-    hadiah: t ? (contoh.hadiah as Hadiah) : null,
+    hadiah: null, // rekening & alamat diambil terpisah setelah undangan dibuka (ambilHadiah)
     tamu: t
       ? {
           kode: t.kode,
@@ -125,7 +127,11 @@ function demoAmbil(slug: string, kode?: string | null): Undangan | null {
 // API publik lapisan data
 // ---------------------------------------------------------------------------
 export async function ambilUndangan(slug: string, kode?: string | null): Promise<Undangan | "butuh_kode" | null> {
-  if (modeDemo) return demoAmbil(slug, kode);
+  if (modeDemo) {
+    const u = demoAmbil(slug, kode);
+    if (u && !u.tamu && !contoh.izinkan_tanpa_kode) return "butuh_kode";
+    return u;
+  }
   const { data, error } = await supabase().rpc("ambil_undangan", { p_slug: slug, p_kode: kode ?? null });
   if (error) throw petakanErrorRpc(error.message);
   if (!data) return null;
@@ -133,17 +139,37 @@ export async function ambilUndangan(slug: string, kode?: string | null): Promise
   return data as Undangan;
 }
 
-export async function tandaiDibuka(slug: string, kode: string): Promise<void> {
+// Batas perangkat per link tamu (sama dengan default kolom events.batas_perangkat).
+const BATAS_PERANGKAT_DEMO = 3;
+
+/** Dipanggil saat tamu menekan "Buka Undangan". Mendaftarkan perangkat; terkunci jika lewat batas. */
+export async function tandaiDibuka(slug: string, kode: string, perangkat: string | null): Promise<{ terkunci: boolean }> {
   if (modeDemo) {
-    const t = storeDemo().tamu.find((x) => x.kode === kode.toLowerCase());
-    if (t) {
-      if (t.status === "baru" || t.status === "terkirim") t.status = "dibuka";
-      t.dibuka_pada ??= new Date().toISOString();
+    const t = slug.toLowerCase() === contoh.slug ? storeDemo().tamu.find((x) => x.kode === kode.toLowerCase()) : undefined;
+    if (!t) return { terkunci: false };
+    if (perangkat && !t.perangkat.includes(perangkat)) {
+      if (t.perangkat.length >= BATAS_PERANGKAT_DEMO) return { terkunci: true };
+      t.perangkat.push(perangkat);
     }
-    return;
+    if (t.status === "baru" || t.status === "terkirim") t.status = "dibuka";
+    t.dibuka_pada ??= new Date().toISOString();
+    return { terkunci: false };
   }
-  const { error } = await supabase().rpc("tandai_dibuka", { p_slug: slug, p_kode: kode });
+  const { data, error } = await supabase().rpc("tandai_dibuka", { p_slug: slug, p_kode: kode, p_perangkat: perangkat });
   if (error) throw petakanErrorRpc(error.message);
+  return { terkunci: Boolean((data as { terkunci?: boolean } | null)?.terkunci) };
+}
+
+/** Rekening & alamat kado: hanya untuk tamu berkode dari perangkat yang sudah terdaftar. */
+export async function ambilHadiah(slug: string, kode: string, perangkat: string | null): Promise<Hadiah | null> {
+  if (modeDemo) {
+    const t = slug.toLowerCase() === contoh.slug ? storeDemo().tamu.find((x) => x.kode === kode.toLowerCase()) : undefined;
+    if (!t || !perangkat || !t.perangkat.includes(perangkat)) return null;
+    return contoh.hadiah as Hadiah;
+  }
+  const { data, error } = await supabase().rpc("ambil_hadiah", { p_slug: slug, p_kode: kode, p_perangkat: perangkat });
+  if (error) throw petakanErrorRpc(error.message);
+  return (data ?? null) as Hadiah | null;
 }
 
 export interface InputRsvp {
@@ -153,6 +179,7 @@ export interface InputRsvp {
   kehadiran: "hadir" | "tidak";
   jumlah: number;
   pesan: string;
+  perangkat: string | null;
 }
 
 export async function kirimRsvp(input: InputRsvp): Promise<Ucapan> {
@@ -164,6 +191,7 @@ export async function kirimRsvp(input: InputRsvp): Promise<Ucapan> {
       p_kehadiran: input.kehadiran,
       p_jumlah: input.jumlah,
       p_pesan: input.pesan,
+      p_perangkat: input.perangkat,
     });
     if (error) throw petakanErrorRpc(error.message);
     return data as Ucapan;
@@ -171,8 +199,7 @@ export async function kirimRsvp(input: InputRsvp): Promise<Ucapan> {
   // logika sama dengan fungsi SQL kirim_rsvp
   if (input.slug.toLowerCase() !== contoh.slug) throw errorDari("ACARA_TIDAK_DITEMUKAN");
   if (contoh.batas_rsvp && Date.now() > Date.parse(contoh.batas_rsvp)) throw errorDari("RSVP_DITUTUP");
-  const nama = input.nama.trim();
-  if (nama.length < 1 || nama.length > 80) throw errorDari("NAMA_TIDAK_VALID");
+  let nama = input.nama.trim();
   const pesan = input.pesan.trim();
   if (pesan.length > 500) throw errorDari("PESAN_TERLALU_PANJANG");
   const jumlah = input.kehadiran === "hadir" ? Math.max(1, input.jumlah || 1) : 0;
@@ -180,7 +207,9 @@ export async function kirimRsvp(input: InputRsvp): Promise<Ucapan> {
   if (input.kode) {
     const t = s.tamu.find((x) => x.kode === input.kode!.toLowerCase());
     if (!t) throw errorDari("KODE_TIDAK_VALID");
+    if (!input.perangkat || !t.perangkat.includes(input.perangkat)) throw errorDari("PERANGKAT_TIDAK_TERDAFTAR");
     if (jumlah > t.maks_orang) throw errorDari("JUMLAH_MELEBIHI_BATAS");
+    nama = t.nama.slice(0, 80); // nama mengikuti daftar tamu
     let u = s.ucapan.find((x) => x.kode === t.kode);
     if (u) Object.assign(u, { nama, kehadiran: input.kehadiran, jumlah, pesan });
     else {
@@ -192,6 +221,8 @@ export async function kirimRsvp(input: InputRsvp): Promise<Ucapan> {
     t.dibuka_pada ??= new Date().toISOString();
     return { id: u.id, nama: u.nama, kehadiran: u.kehadiran, pesan: u.pesan, created_at: u.created_at };
   }
+  if (!contoh.izinkan_tanpa_kode) throw errorDari("BUTUH_KODE");
+  if (nama.length < 1 || nama.length > 80) throw errorDari("NAMA_TIDAK_VALID");
   if (jumlah > 4) throw errorDari("JUMLAH_MELEBIHI_BATAS");
   const u: UcapanDemo = { id: `demo-${Date.now()}`, kode: null, nama, kehadiran: input.kehadiran, jumlah, pesan, created_at: new Date().toISOString() };
   s.ucapan.unshift(u);
