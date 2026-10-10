@@ -14,6 +14,7 @@ Buka jawaban ke Deny dengan `Deny, [PR]`. Santai (gua/lu), ringkas, karena Deny 
 - Jangan sentuh `supabase/migrations/0001_skema_awal.sql` dan `supabase/SETUP-SUPABASE.sql`.
 - Jangan tulis rahasia (service_role, secret key, token, password) di kode, commit, PR, atau chat. Kunci Supabase cuma diisi Deny di Environment Variables Vercel.
 - Cron `/api/jaga` di `vercel.json` jangan dihapus.
+- `main` langsung jadi produksi. Jangan pernah bilang "tinggal merge" atau "siap di-merge" sebelum Deny bilang sudah mencoba pratinjau. Yang benar: "pratinjau siap dicoba", lalu tulis linknya dan langkahnya. Ini berlaku juga saat memantau PR dan statusnya jadi hijau.
 
 ## Langkah
 
@@ -35,7 +36,8 @@ Buka jawaban ke Deny dengan `Deny, [PR]`. Santai (gua/lu), ringkas, karena Deny 
    ```
    Hasil build (`node_modules/`, `.next/`) sudah diabaikan `.gitignore`, jadi jangan di-commit.
 7. **Buka PR ke `main`** lewat tool GitHub MCP `create_pull_request` (owner `Dragon1D`, repo `momenmu-app`). Pakai judul dari Deny kalau ada. Isinya pakai format di bawah, dan baris pertamanya selalu bagian database.
-8. **Lapor ke Deny** pakai format serah terima di bawah. Tawarkan untuk memantau PR (komentar review dan status Vercel) lewat `subscribe_pr_activity`.
+8. **Ambil link pratinjau.** Cek status Vercel lewat `pull_request_read` (`get_status`), lalu ambil link Preview dari komentar bot Vercel (`get_comments`). Kalau masih Building, tulis "pratinjau lagi dibangun ±1 menit". Jangan kirim link yang belum siap. Alamat produksi: `https://momenmu-app.vercel.app`.
+9. **Lapor ke Deny** pakai format serah terima di bawah, dengan blok **Sebelum Merge** paling atas. Tawarkan untuk memantau PR (komentar review dan status Vercel) lewat `subscribe_pr_activity`.
 
 ## Format isi PR
 
@@ -45,9 +47,10 @@ Langkah database sebelum Merge: tidak ada
 ## Ringkasan perubahan
 - <apa yang berubah dan kenapa, 1–4 poin>
 
-## Cara cek di pratinjau
-1. Buka link pratinjau Vercel di komentar bot Vercel pada PR ini.
-2. <halaman yang dibuka dan apa yang harus terlihat, di HP>
+## Cara cek di pratinjau (centang sebelum Merge)
+Link pratinjau: <link Preview dari komentar bot Vercel>
+- [ ] <halaman yang dibuka dan apa yang harus terlihat, di HP>
+- [ ] <langkah berikutnya>
 
 ## Cek lokal
 cek.sh: semua bersih · tes HP (momenmu-tes): <n>/<n> lulus atau "tidak dijalankan, karena <alasan>"
@@ -63,16 +66,26 @@ Kalau ada migrasi, ganti baris pertama dengan:
 ⚠️ <kalau ada data yang dihapus atau diubah: tabel dan barisnya>
 ```
 
+Langkah pratinjau ditulis sebagai checkbox, supaya Deny bisa mencentangnya di HP dan GitHub menampilkan "0 of n tasks" sampai semuanya dicoba. Kalau PR tidak mengubah tampilan atau perilaku app (misalnya cuma teks aturan atau skill), tulis satu checkbox: `- [ ] Tidak ada yang perlu dicoba di pratinjau, cukup lihat isi perubahan (Files changed)`.
+
 ## Format serah terima ke Deny
 
 ```
 Deny, [PR] <judul PR>
-Link: <url PR>
+Link PR: <url PR>
+
+⚠️ Sebelum Merge (urut):
+1. Database: tidak ada / jalankan `<file SQL>` di Supabase SQL Editor dulu
+2. Coba di pratinjau: <link pratinjau>
+   - <langkah 1 dan yang harus terlihat>
+   - <langkah 2>
+3. Kalau semua oke, baru Merge. Kalau ada yang aneh, bilang gua dulu.
+
 Isi: <1–3 poin>
-Database: tidak ada / <nama file SQL, jalankan sebelum Merge>
 Cek: cek.sh bersih · tes HP <n>/<n>
-Cek di pratinjau: <1–2 langkah>
 ```
+
+Kalau tidak ada yang perlu dicoba, ganti poin 2 dengan "Nggak ada perubahan tampilan, cukup lihat isi perubahan (Files changed)". Jangan hilangkan blok Sebelum Merge.
 
 ## Kalau ada kendala
 
