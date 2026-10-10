@@ -1,11 +1,12 @@
 // Akses data dashboard /kelola dari browser.
 // - Supabase: login email + sandi (Supabase Auth); keamanan dijaga Row Level Security
-//   (pemilik hanya bisa melihat & mengubah acaranya sendiri).
+//   (pemilik hanya bisa melihat & mengubah acaranya sendiri, admin agensi bisa semua).
+// - File foto/musik disimpan per acara: media/<id-acara>/foto|musik/...
 // - Demo: jika env Supabase kosong, data contoh disimpan di memori tab ini.
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import contoh from "../../../supabase/contoh-acara.json";
 import type { Hadiah, Konten, NamaTema } from "../tipe";
-import type { Acara, InputTamu, KelolaApi, Pengguna, TamuBaris, UbahAcara, UcapanBaris } from "./tipe";
+import type { Acara, BerkasMedia, InputTamu, KelolaApi, KlienBaris, Pengguna, TamuBaris, UbahAcara, UcapanBaris } from "./tipe";
 
 const BUCKET = "media";
 const EKSTENSI: Record<string, string> = {
@@ -21,6 +22,11 @@ const EKSTENSI: Record<string, string> = {
 
 const URL_SB = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const KUNCI_SB = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const PRATINJAU = "Pratinjau";
+
+/** media/<id-acara>/foto/... untuk foto, media/<id-acara>/musik/... untuk musik */
+const subFolder = (jenis: string) => (jenis.startsWith("audio/") ? "musik" : "foto");
+const namaBerkas = (ext: string) => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
 const KOLOM_ACARA = "id, slug, tema, waktu_acara, batas_rsvp, aktif_sampai, konten, hadiah, izinkan_tanpa_kode, batas_perangkat";
 const KOLOM_TAMU = "id, kode, nama, kategori, telepon, maks_orang, status, jumlah_hadir, dikirim_pada, dibuka_pada, dijawab_pada, perangkat, created_at";
@@ -30,6 +36,9 @@ const PESAN: Record<string, string> = {
   "Invalid login credentials": "Email atau kata sandi salah.",
   "Email not confirmed": "Email belum dikonfirmasi. Konfirmasi dulu lewat Supabase → Authentication → Users.",
   "duplicate key value violates unique constraint \"events_slug_key\"": "Alamat (slug) itu sudah dipakai acara lain.",
+  akun_tidak_ditemukan: "Email itu belum punya akun. Buat dulu di Supabase → Authentication → Users → Add user (centang Auto Confirm User).",
+  acara_tidak_ditemukan: "Acara tidak ditemukan (mungkin sudah dihapus). Muat ulang halaman.",
+  khusus_admin: "Hanya admin Momenmu yang bisa melakukan ini.",
 };
 
 function galat(e: { message?: string } | null | undefined, cadangan = "Terjadi kesalahan. Coba lagi."): Error {
@@ -61,6 +70,22 @@ function apiSupabase(): KelolaApi {
   });
   let uid: string | null = null;
   const pengguna = (u: { id: string; email?: string | null } | null | undefined): Pengguna | null => (u ? ((uid = u.id), { id: u.id, email: u.email ?? "" }) : null);
+  async function idAkun(): Promise<string | null> {
+    if (!uid) {
+      const { data } = await sb.auth.getSession();
+      uid = data.session?.user.id ?? null;
+    }
+    return uid;
+  }
+  const AWALAN_PUBLIK = `${URL_SB!.replace(/\/$/, "")}/storage/v1/object/public/${BUCKET}/`;
+  const keJalur = (url: string): string | null => {
+    if (!url.startsWith(AWALAN_PUBLIK)) return null;
+    try {
+      return decodeURIComponent(url.slice(AWALAN_PUBLIK.length).split(/[?#]/)[0]);
+    } catch {
+      return null;
+    }
+  };
 
   return {
     demo: false,
@@ -153,15 +178,11 @@ function apiSupabase(): KelolaApi {
       const { error } = await sb.from("wishes").delete().eq("id", id);
       if (error) throw galat(error);
     },
-    async unggah(berkas, jenis) {
-      if (!uid) {
-        const { data } = await sb.auth.getSession();
-        uid = data.session?.user.id ?? null;
-      }
-      if (!uid) throw new Error("Sesi berakhir. Silakan masuk lagi.");
+    async unggah(berkas, jenis, acaraId) {
+      if (!(await idAkun())) throw new Error("Sesi berakhir. Silakan masuk lagi.");
       const ext = EKSTENSI[jenis];
       if (!ext) throw new Error("Jenis berkas tidak didukung. Gunakan JPG/PNG/WebP untuk foto, MP3/M4A untuk musik.");
-      const path = `${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const path = `${acaraId}/${subFolder(jenis)}/${namaBerkas(ext)}`;
       // Unggahan Blob dikirim sebagai form-data; jenis berkas diambil dari Blob itu sendiri,
       // jadi pastikan jenisnya benar (file musik dari sebagian HP tidak membawa jenis).
       const isi = berkas.type === jenis ? berkas : new Blob([berkas], { type: jenis });
@@ -169,18 +190,82 @@ function apiSupabase(): KelolaApi {
       if (error) throw galat(error, "Gagal mengunggah berkas.");
       return sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
     },
+    async hapusBerkas(acaraId, urls) {
+      const akun = await idAkun();
+      // hanya file di folder acara ini (atau folder lama milik akun sendiri); foto contoh & file acara lain tidak disentuh
+      const paths = [...new Set(urls.map(keJalur).filter((x): x is string => !!x && (x.startsWith(`${acaraId}/`) || (!!akun && x.startsWith(`${akun}/`)))))];
+      let n = 0;
+      for (let i = 0; i < paths.length; i += 100) {
+        const { data, error } = await sb.storage.from(BUCKET).remove(paths.slice(i, i + 100));
+        if (error) throw galat(error, "Gagal menghapus file.");
+        n += data?.length ?? 0;
+      }
+      return n;
+    },
+    async daftarBerkas(acaraId) {
+      const semua: BerkasMedia[] = [];
+      for (const sub of ["foto", "musik"]) {
+        for (let dari = 0; ; dari += 1000) {
+          const { data, error } = await sb.storage.from(BUCKET).list(`${acaraId}/${sub}`, { limit: 1000, offset: dari, sortBy: { column: "name", order: "asc" } });
+          if (error) throw galat(error, "Gagal membaca daftar file.");
+          for (const f of data ?? []) {
+            if (!f.id) continue; // folder
+            const path = `${acaraId}/${sub}/${f.name}`;
+            semua.push({ path, url: sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl, ukuran: Number(f.metadata?.size ?? 0) });
+          }
+          if (!data || data.length < 1000) break;
+        }
+      }
+      return semua;
+    },
+    async peran() {
+      const { data, error } = await sb.rpc("is_staf");
+      if (error) {
+        // SQL 0003 belum dijalankan → anggap akun biasa
+        if (error.code === "PGRST202" || /is_staf/.test(error.message)) return "klien";
+        throw galat(error);
+      }
+      return data ? "staf" : "klien";
+    },
+    async daftarKlien() {
+      const { data, error } = await sb.rpc("daftar_klien");
+      if (error) throw galat(error);
+      return ((data ?? []) as KlienBaris[]).map((r) => ({ ...r, jumlah_tamu: Number(r.jumlah_tamu), sudah_jawab: Number(r.sudah_jawab), hadir: Number(r.hadir) }));
+    },
+    async buatAcara(d) {
+      const { data, error } = await sb
+        .from("events")
+        .insert({ ...d, tema: "kastil", izinkan_tanpa_kode: false, batas_perangkat: 3 })
+        .select(KOLOM_ACARA)
+        .single();
+      if (error) throw galat(error, "Gagal membuat acara.");
+      return data as Acara;
+    },
+    async sambungkanPemilik(acaraId, email) {
+      const { data, error } = await sb.rpc("sambungkan_pemilik", { p_acara: acaraId, p_email: email?.trim() || null });
+      if (error) throw galat(error);
+      return (data as string | null) ?? null;
+    },
+    async hapusAcara(acaraId) {
+      const berkas = await this.daftarBerkas(acaraId);
+      if (berkas.length) await this.hapusBerkas(acaraId, berkas.map((b) => b.url));
+      const { data, error } = await sb.from("events").delete().eq("id", acaraId).select("id");
+      if (error) throw galat(error, "Gagal menghapus acara.");
+      if (!data?.length) throw new Error("Acara tidak terhapus. Hanya admin Momenmu yang bisa menghapus acara.");
+    },
   };
 }
 
 // ---------------------------------------------------------------------------
-// Demo (memori)
+// Demo (memori). Masuk dengan email berawalan "admin" untuk mencoba tab Klien.
 // ---------------------------------------------------------------------------
 function apiDemo(): KelolaApi {
   const tunggu = () => new Promise((r) => setTimeout(r, 150));
   const id = () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2));
   const sekarang = Date.now();
+  const salin = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
   let masukSebagai: Pengguna | null = null;
-  let acara: Acara = {
+  const pertama: Acara = {
     id: "demo-acara",
     slug: contoh.slug,
     tema: contoh.tema as NamaTema,
@@ -192,7 +277,14 @@ function apiDemo(): KelolaApi {
     izinkan_tanpa_kode: false,
     batas_perangkat: 3,
   };
-  let tamu: TamuBaris[] = contoh.tamu.map((t, i) => ({
+  let semua: Acara[] = [pertama];
+  const pemilik = new Map<string, string | null>([[pertama.id, null]]);
+  const dibuat = new Map<string, string>([[pertama.id, new Date(sekarang - 86_400_000).toISOString()]]);
+  const tamuPer = new Map<string, TamuBaris[]>();
+  const ucapanPer = new Map<string, UcapanBaris[]>();
+  const berkasPer = new Map<string, BerkasMedia[]>();
+
+  const tamuAwal: TamuBaris[] = contoh.tamu.map((t, i) => ({
     id: id(),
     kode: t.kode,
     nama: t.nama,
@@ -207,12 +299,21 @@ function apiDemo(): KelolaApi {
     perangkat: [],
     created_at: new Date(sekarang - (20 - i) * 60_000).toISOString(),
   }));
-  let ucapan: UcapanBaris[] = contoh.ucapan.map((u, i) => {
-    const t = tamu.find((x) => x.kode === u.kode);
+  const ucapanAwal: UcapanBaris[] = contoh.ucapan.map((u, i) => {
+    const t = tamuAwal.find((x) => x.kode === u.kode);
     if (t) Object.assign(t, { status: u.kehadiran, jumlah_hadir: u.jumlah, dibuka_pada: new Date(sekarang - 7_200_000).toISOString(), dijawab_pada: new Date(sekarang - 3_600_000).toISOString(), perangkat: ["demo"] });
     return { id: id(), guest_id: t?.id ?? null, nama: u.nama, kehadiran: u.kehadiran as "hadir" | "tidak", jumlah: u.jumlah, pesan: u.pesan, disembunyikan: false, created_at: new Date(sekarang - (i + 1) * 10_800_000).toISOString() };
   });
-  const salin = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
+  tamuPer.set(pertama.id, tamuAwal);
+  ucapanPer.set(pertama.id, ucapanAwal);
+
+  const staf = () => !!masukSebagai?.email.toLowerCase().startsWith("admin");
+  const terlihat = () => (staf() ? semua : semua.filter((a, i) => i === 0 || pemilik.get(a.id) === masukSebagai?.email.toLowerCase()));
+  const semuaTamu = () => [...tamuPer.values()].flat();
+  const tamuDari = (a: string) => {
+    if (!tamuPer.has(a)) tamuPer.set(a, []);
+    return tamuPer.get(a)!;
+  };
 
   return {
     demo: true,
@@ -232,29 +333,31 @@ function apiDemo(): KelolaApi {
     },
     async daftarAcara() {
       await tunggu();
-      return [salin(acara)];
+      return salin(terlihat());
     },
-    async simpanAcara(_id, ubah) {
+    async simpanAcara(idA, ubah) {
       await tunggu();
-      acara = { ...acara, ...salin(ubah) };
-      return salin(acara);
+      const a = semua.find((x) => x.id === idA);
+      if (!a) throw new Error("Acara tidak ditemukan.");
+      Object.assign(a, salin(ubah));
+      return salin(a);
     },
-    async daftarTamu() {
+    async daftarTamu(a) {
       await tunggu();
-      return salin(tamu);
+      return salin(tamuDari(a));
     },
-    async tambahTamu(_a, rows) {
+    async tambahTamu(a, rows) {
       await tunggu();
       const dasar = Date.now();
       const baru = rows.map((r: InputTamu & { kode: string }, i) => ({
         id: id(), ...r, status: "baru" as const, jumlah_hadir: null, dikirim_pada: null, dibuka_pada: null, dijawab_pada: null, perangkat: [], created_at: new Date(dasar + i).toISOString(),
       }));
-      tamu = [...tamu, ...baru];
+      tamuDari(a).push(...baru);
       return salin(baru);
     },
     async ubahTamu(idTamu, ubah) {
       await tunggu();
-      const t = tamu.find((x) => x.id === idTamu);
+      const t = semuaTamu().find((x) => x.id === idTamu);
       if (!t) throw new Error("Tamu tidak ditemukan.");
       Object.assign(t, salin(ubah));
       return salin(t);
@@ -262,35 +365,94 @@ function apiDemo(): KelolaApi {
     async ubahBanyakTamu(ids, ubah) {
       await tunggu();
       const set = new Set(ids);
-      for (const t of tamu) if (set.has(t.id)) Object.assign(t, salin(ubah));
+      for (const t of semuaTamu()) if (set.has(t.id)) Object.assign(t, salin(ubah));
     },
     async hapusTamu(ids) {
       await tunggu();
       const set = new Set(ids);
-      tamu = tamu.filter((t) => !set.has(t.id));
+      for (const [a, daftar] of tamuPer) tamuPer.set(a, daftar.filter((t) => !set.has(t.id)));
     },
     async tandaiTerkirim(ids) {
       await tunggu();
-      for (const t of tamu) {
+      for (const t of semuaTamu()) {
         if (!ids.includes(t.id)) continue;
         t.dikirim_pada ??= new Date().toISOString();
         if (t.status === "baru") t.status = "terkirim";
       }
     },
-    async daftarUcapan() {
+    async daftarUcapan(a) {
       await tunggu();
-      return salin(ucapan);
+      return salin(ucapanPer.get(a) ?? []);
     },
     async ubahUcapan(idU, disembunyikan) {
-      const u = ucapan.find((x) => x.id === idU);
-      if (u) u.disembunyikan = disembunyikan;
+      for (const daftar of ucapanPer.values()) {
+        const u = daftar.find((x) => x.id === idU);
+        if (u) u.disembunyikan = disembunyikan;
+      }
     },
     async hapusUcapan(idU) {
-      ucapan = ucapan.filter((x) => x.id !== idU);
+      for (const [a, daftar] of ucapanPer) ucapanPer.set(a, daftar.filter((x) => x.id !== idU));
     },
-    async unggah(berkas) {
+    async unggah(berkas, jenis, a) {
       await tunggu();
-      return URL.createObjectURL(berkas); // hanya untuk pratinjau di mode demo (hilang saat halaman ditutup)
+      const url = URL.createObjectURL(berkas); // hanya untuk pratinjau di mode demo (hilang saat halaman ditutup)
+      const daftar = berkasPer.get(a) ?? [];
+      daftar.push({ path: `${a}/${subFolder(jenis)}/${namaBerkas(EKSTENSI[jenis] ?? "bin")}`, url, ukuran: berkas.size });
+      berkasPer.set(a, daftar);
+      return url;
+    },
+    async hapusBerkas(a, urls) {
+      const buang = new Set(urls);
+      const daftar = berkasPer.get(a) ?? [];
+      const sisa = daftar.filter((b) => !buang.has(b.url));
+      for (const b of daftar) if (buang.has(b.url)) URL.revokeObjectURL(b.url);
+      berkasPer.set(a, sisa);
+      return daftar.length - sisa.length;
+    },
+    async daftarBerkas(a) {
+      await tunggu();
+      return salin(berkasPer.get(a) ?? []);
+    },
+    async peran() {
+      return staf() ? "staf" : "klien";
+    },
+    async daftarKlien() {
+      await tunggu();
+      return semua.map((a) => {
+        const t = tamuDari(a.id).filter((x) => x.kategori !== PRATINJAU);
+        return {
+          id: a.id,
+          slug: a.slug,
+          nama: `${a.konten.mempelai.pria.panggilan} & ${a.konten.mempelai.wanita.panggilan}`,
+          waktu_acara: a.waktu_acara,
+          aktif_sampai: a.aktif_sampai,
+          owner_email: pemilik.get(a.id) ?? null,
+          jumlah_tamu: t.length,
+          sudah_jawab: t.filter((x) => x.status === "hadir" || x.status === "tidak").length,
+          hadir: t.reduce((n, x) => n + (x.status === "hadir" ? (x.jumlah_hadir ?? 0) : 0), 0),
+          dibuat: dibuat.get(a.id) ?? new Date().toISOString(),
+        };
+      });
+    },
+    async buatAcara(d) {
+      await tunggu();
+      if (semua.some((a) => a.slug === d.slug)) throw new Error("Alamat (slug) itu sudah dipakai acara lain.");
+      const a: Acara = { ...salin(d), id: id(), tema: "kastil", izinkan_tanpa_kode: false, batas_perangkat: 3 };
+      semua = [...semua, a];
+      pemilik.set(a.id, null);
+      dibuat.set(a.id, new Date().toISOString());
+      return salin(a);
+    },
+    async sambungkanPemilik(a, email) {
+      await tunggu();
+      const e = email?.trim().toLowerCase() || null;
+      pemilik.set(a, e);
+      return e;
+    },
+    async hapusAcara(a) {
+      await tunggu();
+      semua = semua.filter((x) => x.id !== a);
+      for (const m of [pemilik, dibuat, tamuPer, ucapanPer, berkasPer]) m.delete(a);
     },
   };
 }

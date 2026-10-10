@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Hadiah, Konten, Mempelai, SesiAcara } from "@/lib/tipe";
 import type { Acara, KelolaApi, UbahAcara } from "@/lib/kelola/tipe";
-import { dariInputWaktu, keInputWaktu, perkecilFoto } from "@/lib/kelola/util";
+import { dariInputWaktu, keInputWaktu, mediaDariKonten, perkecilFoto } from "@/lib/kelola/util";
 import { Isian, pesanGalat, type BeriTahu } from "./bersama";
 
 type KontenDraf = Konten & { pesan_wa?: string | null };
@@ -102,8 +102,10 @@ function pindah<T>(arr: T[], i: number, arah: -1 | 1): T[] {
 
 const JENIS_MUSIK: Record<string, string> = { mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", ogg: "audio/ogg" };
 
-export default function TabKonten({ api, acara, perbaruiAcara, beriTahu }: { api: KelolaApi; acara: Acara; perbaruiAcara: (a: Acara) => void; beriTahu: BeriTahu }) {
+export default function TabKonten({ api, acara, acaraLain, perbaruiAcara, beriTahu }: { api: KelolaApi; acara: Acara; acaraLain: Acara[]; perbaruiAcara: (a: Acara) => void; beriTahu: BeriTahu }) {
   const [draf, setDraf] = useState<Draf>(() => awalDraf(acara));
+  // file yang diunggah sejak terakhir disimpan (dibuang lagi kalau batal / tidak jadi dipakai)
+  const unggahanBaru = useRef<string[]>([]);
   const [galat, setGalat] = useState<string[]>([]);
   const [sibuk, setSibuk] = useState(false);
   const [unggah, setUnggah] = useState<string | null>(null);
@@ -136,7 +138,9 @@ export default function TabKonten({ api, acara, perbaruiAcara, beriTahu }: { api
     setUnggah(kunci);
     try {
       const { blob, jenis } = await perkecilFoto(f, sisi);
-      return await api.unggah(blob, jenis);
+      const url = await api.unggah(blob, jenis, acara.id);
+      unggahanBaru.current.push(url);
+      return url;
     } catch (e) {
       beriTahu(pesanGalat(e) === "Terjadi kesalahan. Coba lagi." ? "Foto tidak bisa dibaca. Coba foto lain (JPG/PNG)." : pesanGalat(e), "galat");
       return null;
@@ -164,7 +168,8 @@ export default function TabKonten({ api, acara, perbaruiAcara, beriTahu }: { api
     if (f.size > 10 * 1024 * 1024) return beriTahu("Ukuran musik maks. 10 MB. Gunakan MP3 128 kbps (±1 MB per menit).", "galat");
     setUnggah("musik");
     try {
-      const url = await api.unggah(f, jenis);
+      const url = await api.unggah(f, jenis, acara.id);
+      unggahanBaru.current.push(url);
       setK((k) => ({ ...k, musik_url: url }));
       beriTahu("Musik diunggah. Jangan lupa klik Simpan.");
     } catch (e) {
@@ -172,6 +177,13 @@ export default function TabKonten({ api, acara, perbaruiAcara, beriTahu }: { api
     } finally {
       setUnggah(null);
     }
+  }
+
+  /** Hapus file yang sudah tidak dipakai undangan ini (dan tidak dipakai acara lain). Gagal pun tidak apa-apa. */
+  function buangFile(kandidat: Iterable<string>, dipakai: Set<string>) {
+    for (const a of acaraLain) for (const u of mediaDariKonten(a.konten)) dipakai.add(u);
+    const buang = [...new Set(kandidat)].filter((u) => !dipakai.has(u));
+    if (buang.length) api.hapusBerkas(acara.id, buang).catch(() => {});
   }
 
   async function simpan() {
@@ -191,6 +203,9 @@ export default function TabKonten({ api, acara, perbaruiAcara, beriTahu }: { api
       const paling = [...bersih.konten.acara].sort((a, b) => Date.parse(a.mulai) - Date.parse(b.mulai))[0]?.mulai;
       if (paling && Date.parse(paling) !== Date.parse(acara.waktu_acara)) ubah.waktu_acara = paling;
       const a = await api.simpanAcara(acara.id, ubah);
+      // foto/musik yang diganti atau dihapus ikut dibuang dari penyimpanan supaya kuota tidak penuh
+      buangFile([...mediaDariKonten(acara.konten), ...unggahanBaru.current], mediaDariKonten(a.konten));
+      unggahanBaru.current = [];
       perbaruiAcara(a);
       setDraf(awalDraf(a));
       beriTahu("Tersimpan. Buka/muat ulang undangan untuk melihat hasilnya.");
@@ -570,6 +585,8 @@ export default function TabKonten({ api, acara, perbaruiAcara, beriTahu }: { api
             className="kl-btn kl-btn-teks"
             onClick={() => {
               if (window.confirm("Batalkan semua perubahan yang belum disimpan?")) {
+                buangFile(unggahanBaru.current, mediaDariKonten(acara.konten));
+                unggahanBaru.current = [];
                 setDraf(awalDraf(acara));
                 setGalat([]);
               }

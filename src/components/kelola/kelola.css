@@ -1366,3 +1366,80 @@
 .kl-toast-galat {
   background: var(--kl-galat);
 }
+
+/* ---------- Tab Klien (admin agensi) ---------- */
+.kl-klien {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.kl-klien-aktif {
+  border-color: var(--kl-peach-tua);
+  box-shadow: inset 4px 0 0 var(--kl-utama);
+}
+.kl-klien-kepala {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.kl-klien-kepala h3 {
+  margin: 0 0 2px;
+  font-size: 1.05rem;
+}
+.kl-klien-info {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px 16px;
+  margin: 0;
+}
+.kl-klien-info div {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+.kl-klien-info dt {
+  flex: 0 0 84px;
+  color: var(--kl-redup);
+  font-size: 0.85rem;
+}
+.kl-klien-info dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.92rem;
+}
+@media (min-width: 720px) {
+  .kl-klien-info {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .kl-klien-info div {
+    flex-direction: column;
+    gap: 0;
+  }
+  .kl-klien-info dt {
+    flex-basis: auto;
+  }
+}
+.kl-rincian {
+  margin: 4px 0 12px;
+  padding: 10px 12px;
+  border: 1px dashed var(--kl-garis-kuat);
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+.kl-rincian summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--kl-utama);
+}
+.kl-rincian[open] summary {
+  margin-bottom: 8px;
+}
+.kl-pesan-blok {
+  word-break: normal;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+}

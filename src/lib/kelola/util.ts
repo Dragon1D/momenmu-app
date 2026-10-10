@@ -1,4 +1,5 @@
 // Fungsi bantu dashboard /kelola: kode tamu, nomor WhatsApp, impor/ekspor, waktu WIB.
+import type { Konten } from "../tipe";
 import type { InputTamu, TamuBaris } from "./tipe";
 
 // tanpa huruf/angka yang mirip (0/o, 1/l/i) supaya tidak salah ketik
@@ -251,3 +252,35 @@ export async function perkecilFoto(berkas: File, sisiMaks = 1600): Promise<{ blo
 
 export const SLUG_TERLARANG = new Set(["kelola", "api", "brand", "tema", "_next", "admin", "login"]);
 export const POLA_SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+/** "Budi" + "Ani" → "budi-ani" (saran alamat link acara baru). */
+export function slugDariNama(...nama: string[]): string {
+  return nama
+    .map((n) => n.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""))
+    .filter(Boolean)
+    .join("-")
+    .slice(0, 60)
+    .replace(/-+$/, "");
+}
+
+// ---------------------------------------------------------------------------
+// File foto/musik yang dipakai sebuah undangan (untuk bersih-bersih file lama)
+// ---------------------------------------------------------------------------
+export function mediaDariKonten(k: Partial<Konten> | null | undefined): Set<string> {
+  const s = new Set<string>();
+  const tambah = (u: string | null | undefined) => {
+    if (u) s.add(u);
+  };
+  if (!k) return s;
+  tambah(k.mempelai?.pria?.foto);
+  tambah(k.mempelai?.wanita?.foto);
+  for (const x of k.kisah ?? []) tambah(x.foto);
+  for (const g of k.galeri ?? []) tambah(g.src);
+  tambah(k.musik_url);
+  return s;
+}
+
+export function formatUkuran(byte: number): string {
+  if (byte < 1024 * 1024) return `${Math.max(1, Math.round(byte / 1024))} KB`;
+  return `${(byte / 1024 / 1024).toLocaleString("id-ID", { maximumFractionDigits: 1 })} MB`;
+}
