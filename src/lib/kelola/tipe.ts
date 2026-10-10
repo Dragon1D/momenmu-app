@@ -78,6 +78,8 @@ export interface BerkasMedia {
   path: string;
   url: string;
   ukuran: number;
+  /** Waktu unggah (ISO); null kalau tidak diketahui. */
+  dibuat: string | null;
 }
 
 export type InputAcaraBaru = Pick<Acara, "slug" | "waktu_acara" | "batas_rsvp" | "aktif_sampai" | "konten" | "hadiah">;

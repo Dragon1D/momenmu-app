@@ -1,6 +1,6 @@
 // Fungsi bantu dashboard /kelola: kode tamu, nomor WhatsApp, impor/ekspor, waktu WIB.
 import type { Konten } from "../tipe";
-import type { InputTamu, TamuBaris } from "./tipe";
+import type { BerkasMedia, InputTamu, TamuBaris } from "./tipe";
 
 // tanpa huruf/angka yang mirip (0/o, 1/l/i) supaya tidak salah ketik
 const ABJAD = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -278,6 +278,24 @@ export function mediaDariKonten(k: Partial<Konten> | null | undefined): Set<stri
   for (const g of k.galeri ?? []) tambah(g.src);
   tambah(k.musik_url);
   return s;
+}
+
+/** Unggahan yang lebih baru dari ini tidak ikut dibersihkan: mungkin klien belum klik Simpan. */
+export const JEDA_FILE_BARU_MS = 24 * 60 * 60 * 1000;
+
+/** Pisahkan file folder acara yang tidak dipakai undangan mana pun: `buang` aman dihapus, `baru` dilewati dulu. */
+export function pilahBerkas(berkas: BerkasMedia[], semuaAcara: { konten: Konten }[], sekarang = Date.now()) {
+  const dipakai = new Set<string>();
+  for (const a of semuaAcara) for (const u of mediaDariKonten(a.konten)) dipakai.add(u);
+  const buang: BerkasMedia[] = [];
+  const baru: BerkasMedia[] = [];
+  for (const b of berkas) {
+    if (dipakai.has(b.url)) continue;
+    // waktu unggah tidak diketahui dianggap baru (tidak dihapus)
+    if (sekarang - Date.parse(b.dibuat ?? "") >= JEDA_FILE_BARU_MS) buang.push(b);
+    else baru.push(b);
+  }
+  return { buang, baru };
 }
 
 export function formatUkuran(byte: number): string {
