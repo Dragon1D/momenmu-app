@@ -57,6 +57,33 @@ export interface Pengguna {
 
 export type UbahAcara = Partial<Pick<Acara, "slug" | "waktu_acara" | "batas_rsvp" | "aktif_sampai" | "konten" | "hadiah" | "izinkan_tanpa_kode" | "batas_perangkat">>;
 
+/** "staf" = admin agensi (melihat & mengelola semua acara), "klien" = pemilik acara. */
+export type Peran = "staf" | "klien";
+
+/** Satu baris di tab Klien (khusus admin). */
+export interface KlienBaris {
+  id: string;
+  slug: string;
+  nama: string;
+  waktu_acara: string;
+  aktif_sampai: string | null;
+  owner_email: string | null;
+  jumlah_tamu: number;
+  sudah_jawab: number;
+  hadir: number;
+  dibuat: string;
+}
+
+export interface BerkasMedia {
+  path: string;
+  url: string;
+  ukuran: number;
+  /** Waktu unggah (ISO); null kalau tidak diketahui. */
+  dibuat: string | null;
+}
+
+export type InputAcaraBaru = Pick<Acara, "slug" | "waktu_acara" | "batas_rsvp" | "aktif_sampai" | "konten" | "hadiah">;
+
 export type UbahTamu = Partial<InputTamu & Pick<TamuBaris, "kode" | "perangkat" | "status" | "jumlah_hadir" | "dijawab_pada">>;
 
 export interface KelolaApi {
@@ -77,6 +104,19 @@ export interface KelolaApi {
   daftarUcapan(acaraId: string): Promise<UcapanBaris[]>;
   ubahUcapan(id: string, disembunyikan: boolean): Promise<void>;
   hapusUcapan(id: string): Promise<void>;
-  /** Unggah foto/musik ke penyimpanan; hasilnya URL publik. */
-  unggah(berkas: Blob, jenis: string): Promise<string>;
+  /** Unggah foto/musik ke folder acara (media/<id-acara>/foto|musik/...); hasilnya URL publik. */
+  unggah(berkas: Blob, jenis: string, acaraId: string): Promise<string>;
+  /** Hapus file milik acara ini (URL lain diabaikan). Hasil: jumlah file terhapus. */
+  hapusBerkas(acaraId: string, urls: string[]): Promise<number>;
+  /** Semua file di folder acara. */
+  daftarBerkas(acaraId: string): Promise<BerkasMedia[]>;
+
+  // --- khusus admin agensi ---
+  peran(): Promise<Peran>;
+  daftarKlien(): Promise<KlienBaris[]>;
+  buatAcara(data: InputAcaraBaru): Promise<Acara>;
+  /** Sambungkan acara ke akun klien lewat email (null = lepaskan). Hasil: email akun. */
+  sambungkanPemilik(acaraId: string, email: string | null): Promise<string | null>;
+  /** Hapus acara beserta tamu, ucapan, dan file di foldernya. */
+  hapusAcara(acaraId: string): Promise<void>;
 }

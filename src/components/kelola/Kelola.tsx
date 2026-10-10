@@ -1,7 +1,7 @@
 "use client";
-// Dashboard pengantin: momenmu.id/kelola
-// Semua data dibaca & diubah langsung dari browser ke Supabase dengan akun pemilik
-// (Row Level Security memastikan akun hanya bisa melihat acaranya sendiri).
+// Dashboard pengantin & admin: momenmu.id/kelola
+// Semua data dibaca & diubah langsung dari browser ke Supabase dengan akun yang masuk
+// (Row Level Security: klien hanya melihat acaranya sendiri, admin agensi melihat semua + tab Klien).
 import "./kelola.css";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { kelolaApi } from "@/lib/kelola/api";
@@ -13,8 +13,9 @@ import TabTamu, { type FilterTamu } from "./TabTamu";
 import TabKonten from "./TabKonten";
 import TabUcapan from "./TabUcapan";
 import TabPengaturan from "./TabPengaturan";
+import TabKlien from "./TabKlien";
 
-export type Tab = "ringkasan" | "tamu" | "konten" | "ucapan" | "pengaturan";
+export type Tab = "klien" | "ringkasan" | "tamu" | "konten" | "ucapan" | "pengaturan";
 
 export default function Kelola() {
   // undefined = sedang memeriksa sesi (juga saat render di server)
@@ -112,6 +113,8 @@ const TAB: { id: Tab; label: string }[] = [
   { id: "pengaturan", label: "Pengaturan" },
 ];
 
+const TAB_KLIEN: { id: Tab; label: string } = { id: "klien", label: "Klien" };
+
 const namaAcara = (a: Acara) => `${a.konten.mempelai.pria.panggilan} & ${a.konten.mempelai.wanita.panggilan}`;
 
 function Dasbor({ pengguna, onKeluar }: { pengguna: Pengguna; onKeluar: () => void }) {
@@ -126,6 +129,8 @@ function Dasbor({ pengguna, onKeluar }: { pengguna: Pengguna; onKeluar: () => vo
   const [filterTamu, setFilterTamu] = useState<FilterTamu>("");
   const [toast, setToast] = useState<{ n: number; teks: string; jenis: "ok" | "galat" } | null>(null);
   const [memuatUlang, setMemuatUlang] = useState(false);
+  const [staf, setStaf] = useState(false);
+  const [versi, setVersi] = useState(0);
 
   const beriTahu: BeriTahu = useCallback((teks, jenis = "ok") => setToast((t) => ({ n: (t?.n ?? 0) + 1, teks, jenis })), []);
   useEffect(() => {
@@ -136,11 +141,16 @@ function Dasbor({ pengguna, onKeluar }: { pengguna: Pengguna; onKeluar: () => vo
 
   useEffect(() => {
     let batal = false;
-    api.daftarAcara().then(
-      (d) => {
+    Promise.all([api.daftarAcara(), api.peran()]).then(
+      ([d, p]) => {
         if (batal) return;
         setDaftar(d);
         setAcaraId((x) => x ?? d[0]?.id ?? null);
+        if (p === "staf") {
+          setStaf(true);
+          setTab("klien");
+          setPernahDibuka((x) => (x.includes("klien") ? x : [...x, "klien"]));
+        }
       },
       (e) => !batal && setGalatMuat(pesanGalat(e)),
     );
@@ -191,19 +201,38 @@ function Dasbor({ pengguna, onKeluar }: { pengguna: Pengguna; onKeluar: () => vo
   }
 
   async function muatUlang() {
-    if (!acaraId) return;
     setMemuatUlang(true);
     try {
-      const [d, t, u] = await Promise.all([api.daftarAcara(), api.daftarTamu(acaraId), api.daftarUcapan(acaraId)]);
+      const [d, t, u] = await Promise.all([api.daftarAcara(), acaraId ? api.daftarTamu(acaraId) : null, acaraId ? api.daftarUcapan(acaraId) : null]);
       setDaftar(d);
-      setTamu(t);
-      setUcapan(u);
+      if (t) setTamu(t);
+      if (u) setUcapan(u);
+      setVersi((v) => v + 1);
       beriTahu("Data terbaru sudah dimuat");
     } catch (e) {
       beriTahu(pesanGalat(e), "galat");
     } finally {
       setMemuatUlang(false);
     }
+  }
+
+  // --- dari tab Klien (admin) ---
+  const acaraBaru = useCallback((a: Acara) => {
+    setDaftar((d) => [...(d ?? []), a].sort((x, y) => Date.parse(x.waktu_acara) - Date.parse(y.waktu_acara)));
+    setAcaraId((x) => x ?? a.id);
+  }, []);
+  function acaraDihapus(id: string) {
+    const sisa = (daftar ?? []).filter((a) => a.id !== id);
+    setDaftar(sisa);
+    if (acaraId === id) {
+      setAcaraId(sisa[0]?.id ?? null);
+      setTamu(null);
+      setUcapan(null);
+    }
+  }
+  function kelolaAcara(id: string) {
+    if (id !== acaraId) pilihAcara(id);
+    pindahTab("ringkasan");
   }
 
   async function keluar() {
@@ -256,7 +285,8 @@ function Dasbor({ pengguna, onKeluar }: { pengguna: Pengguna; onKeluar: () => vo
     );
   }
 
-  if (!acara) return <BelumTerhubung pengguna={pengguna} onKeluar={keluar} />;
+  if (!acara && !staf) return <BelumTerhubung pengguna={pengguna} onKeluar={keluar} />;
+  const daftarTab = staf ? [TAB_KLIEN, ...(acara ? TAB : [])] : TAB;
 
   return (
     <div className="kl">
@@ -264,12 +294,14 @@ function Dasbor({ pengguna, onKeluar }: { pengguna: Pengguna; onKeluar: () => vo
         <div className="kl-kepala-baris">
           <img src="/brand/monogram.png" alt="" className="kl-monogram" />
           <div className="kl-kepala-judul">
-            <span className="kl-kecil kl-redup">Kelola undangan</span>
-            {daftar.length > 1 ? (
+            <span className="kl-kecil kl-redup">{staf ? "Admin Momenmu" : "Kelola undangan"}</span>
+            {!acara ? (
+              <strong>Belum ada acara</strong>
+            ) : daftar.length > 1 ? (
               <select value={acara.id} onChange={(e) => pilihAcara(e.target.value)} aria-label="Pilih acara">
                 {daftar.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {namaAcara(a)}
+                    {staf ? `${namaAcara(a)} · ${a.slug}` : namaAcara(a)}
                   </option>
                 ))}
               </select>
@@ -277,16 +309,18 @@ function Dasbor({ pengguna, onKeluar }: { pengguna: Pengguna; onKeluar: () => vo
               <strong>{namaAcara(acara)}</strong>
             )}
           </div>
-          <button type="button" className="kl-btn kl-btn-garis kl-btn-kecil" onClick={lihatUndangan} disabled={!tamu}>
-            Lihat undangan
-          </button>
+          {acara && (
+            <button type="button" className="kl-btn kl-btn-garis kl-btn-kecil" onClick={lihatUndangan} disabled={!tamu}>
+              Lihat undangan
+            </button>
+          )}
           <button type="button" className="kl-btn kl-btn-teks kl-btn-kecil kl-muat" onClick={muatUlang} disabled={memuatUlang} aria-label="Muat ulang data terbaru" title="Muat ulang data terbaru">
             <span aria-hidden="true" className={memuatUlang ? "kl-putar" : ""}>↻</span>
             <span className="kl-sembunyi-hp">{memuatUlang ? "Memuat…" : "Muat ulang"}</span>
           </button>
         </div>
         <nav className="kl-tab" role="tablist" aria-label="Menu dashboard">
-          {TAB.map((t) => (
+          {daftarTab.map((t) => (
             <button key={t.id} type="button" role="tab" id={`tab-${t.id}`} aria-controls={`panel-${t.id}`} aria-selected={tab === t.id} className={tab === t.id ? "kl-tab-aktif" : ""} onClick={() => pindahTab(t.id)}>
               {t.label}
               {t.id === "tamu" && tamu && <span className="kl-hitung">{jumlahTamu}</span>}
@@ -299,8 +333,13 @@ function Dasbor({ pengguna, onKeluar }: { pengguna: Pengguna; onKeluar: () => vo
       {api.demo && <div className="kl-pita-demo">Mode demo — data contoh, perubahan tidak disimpan ke database.</div>}
 
       <main className="kl-isi">
-        {!tamu || !ucapan ? (
-          galatMuat ? (
+        {staf && pernahDibuka.includes("klien") && (
+          <section role="tabpanel" id="panel-klien" aria-labelledby="tab-klien" hidden={tab !== "klien"}>
+            <TabKlien api={api} daftar={daftar} acaraId={acaraId} versi={versi} asal={asal} beriTahu={beriTahu} onDibuat={acaraBaru} onDihapus={acaraDihapus} onKelola={kelolaAcara} />
+          </section>
+        )}
+        {!acara ? null : !tamu || !ucapan ? (
+          tab === "klien" ? null : galatMuat ? (
             <div className="kl-kartu">
               <p className="kl-galat">{galatMuat}</p>
               <button type="button" className="kl-btn kl-btn-utama" onClick={muatUlang}>
@@ -315,7 +354,7 @@ function Dasbor({ pengguna, onKeluar }: { pengguna: Pengguna; onKeluar: () => vo
             <section key={t.id} role="tabpanel" id={`panel-${t.id}`} aria-labelledby={`tab-${t.id}`} hidden={tab !== t.id}>
               {t.id === "ringkasan" && <Ringkasan api={api} acara={acara} tamu={tamu} ucapan={ucapan} ubahTamu={ubahTamu} ubahUcapan={ubahUcapan} beriTahu={beriTahu} keTamu={keTamu} keTab={pindahTab} lihatUndangan={lihatUndangan} />}
               {t.id === "tamu" && <TabTamu api={api} acara={acara} tamu={tamu} ubahTamu={ubahTamu} perbaruiAcara={perbaruiAcara} beriTahu={beriTahu} filter={filterTamu} setFilter={setFilterTamu} asal={asal} />}
-              {t.id === "konten" && <TabKonten key={acara.id} api={api} acara={acara} perbaruiAcara={perbaruiAcara} beriTahu={beriTahu} />}
+              {t.id === "konten" && <TabKonten key={acara.id} api={api} acara={acara} acaraLain={daftar.filter((x) => x.id !== acara.id)} perbaruiAcara={perbaruiAcara} beriTahu={beriTahu} />}
               {t.id === "ucapan" && <TabUcapan api={api} acara={acara} ucapan={ucapan} ubahUcapan={ubahUcapan} beriTahu={beriTahu} />}
               {t.id === "pengaturan" && <TabPengaturan key={acara.id} api={api} acara={acara} perbaruiAcara={perbaruiAcara} beriTahu={beriTahu} pengguna={pengguna} onKeluar={keluar} asal={asal} />}
             </section>
@@ -337,33 +376,37 @@ function Dasbor({ pengguna, onKeluar }: { pengguna: Pengguna; onKeluar: () => vo
 // ---------------------------------------------------------------------------
 function BelumTerhubung({ pengguna, onKeluar }: { pengguna: Pengguna; onKeluar: () => void }) {
   const [tersalin, setTersalin] = useState(false);
-  const sql = `update public.events set owner_id = '${pengguna.id}' where slug = 'deny-carelina';`;
+  const sql = `insert into public.staf (user_id, catatan) values ('${pengguna.id}', 'admin Momenmu') on conflict (user_id) do nothing;`;
   return (
     <main className="kl kl-tengah">
       <div className="kl-kartu kl-sempit">
         <h1 className="kl-judul">Akun belum terhubung ke undangan</h1>
         <p>
-          Anda masuk sebagai <b>{pengguna.email}</b>, tetapi akun ini belum menjadi pemilik acara. Lakukan sekali saja:
+          Anda masuk sebagai <b>{pengguna.email}</b>, tetapi akun ini belum memegang acara apa pun. Minta admin Momenmu menyambungkan email ini ke acara Anda, lalu muat ulang halaman.
         </p>
-        <ol className="kl-langkah">
-          <li>Buka Supabase → SQL Editor → New query.</li>
-          <li>
-            Tempel perintah di bawah (ganti <code>deny-carelina</code> jika alamat undangan berbeda), lalu klik <b>Run</b>.
-          </li>
-          <li>Kembali ke sini dan muat ulang halaman.</li>
-        </ol>
-        <pre className="kl-kode-blok">{sql}</pre>
-        <div className="kl-baris-tombol">
+        <details className="kl-rincian">
+          <summary>Untuk admin Momenmu</summary>
+          <ol className="kl-langkah">
+            <li>
+              Menyambungkan klien: masuk dengan akun admin → tab <b>Klien</b> → <b>Sambungkan akun</b> → tulis email ini.
+            </li>
+            <li>
+              Menjadikan akun <i>ini</i> sebagai admin (sekali saja, setelah file SQL 0003 dijalankan): Supabase → SQL Editor → jalankan perintah di bawah → muat ulang.
+            </li>
+          </ol>
+          <pre className="kl-kode-blok">{sql}</pre>
           <button
             type="button"
-            className="kl-btn kl-btn-utama"
+            className="kl-btn kl-btn-garis kl-btn-kecil"
             onClick={async () => {
               setTersalin(await salinTeks(sql));
             }}
           >
             {tersalin ? "Tersalin ✓" : "Salin perintah"}
           </button>
-          <button type="button" className="kl-btn kl-btn-garis" onClick={() => window.location.reload()}>
+        </details>
+        <div className="kl-baris-tombol">
+          <button type="button" className="kl-btn kl-btn-utama" onClick={() => window.location.reload()}>
             Muat ulang
           </button>
           <button type="button" className="kl-btn kl-btn-teks" onClick={onKeluar}>

@@ -1,5 +1,6 @@
 // Fungsi bantu dashboard /kelola: kode tamu, nomor WhatsApp, impor/ekspor, waktu WIB.
-import type { InputTamu, TamuBaris } from "./tipe";
+import type { Konten } from "../tipe";
+import type { BerkasMedia, InputTamu, TamuBaris } from "./tipe";
 
 // tanpa huruf/angka yang mirip (0/o, 1/l/i) supaya tidak salah ketik
 const ABJAD = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -251,3 +252,53 @@ export async function perkecilFoto(berkas: File, sisiMaks = 1600): Promise<{ blo
 
 export const SLUG_TERLARANG = new Set(["kelola", "api", "brand", "tema", "_next", "admin", "login"]);
 export const POLA_SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+/** "Budi" + "Ani" → "budi-ani" (saran alamat link acara baru). */
+export function slugDariNama(...nama: string[]): string {
+  return nama
+    .map((n) => n.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""))
+    .filter(Boolean)
+    .join("-")
+    .slice(0, 60)
+    .replace(/-+$/, "");
+}
+
+// ---------------------------------------------------------------------------
+// File foto/musik yang dipakai sebuah undangan (untuk bersih-bersih file lama)
+// ---------------------------------------------------------------------------
+export function mediaDariKonten(k: Partial<Konten> | null | undefined): Set<string> {
+  const s = new Set<string>();
+  const tambah = (u: string | null | undefined) => {
+    if (u) s.add(u);
+  };
+  if (!k) return s;
+  tambah(k.mempelai?.pria?.foto);
+  tambah(k.mempelai?.wanita?.foto);
+  for (const x of k.kisah ?? []) tambah(x.foto);
+  for (const g of k.galeri ?? []) tambah(g.src);
+  tambah(k.musik_url);
+  return s;
+}
+
+/** Unggahan yang lebih baru dari ini tidak ikut dibersihkan: mungkin klien belum klik Simpan. */
+export const JEDA_FILE_BARU_MS = 24 * 60 * 60 * 1000;
+
+/** Pisahkan file folder acara yang tidak dipakai undangan mana pun: `buang` aman dihapus, `baru` dilewati dulu. */
+export function pilahBerkas(berkas: BerkasMedia[], semuaAcara: { konten: Konten }[], sekarang = Date.now()) {
+  const dipakai = new Set<string>();
+  for (const a of semuaAcara) for (const u of mediaDariKonten(a.konten)) dipakai.add(u);
+  const buang: BerkasMedia[] = [];
+  const baru: BerkasMedia[] = [];
+  for (const b of berkas) {
+    if (dipakai.has(b.url)) continue;
+    // waktu unggah tidak diketahui dianggap baru (tidak dihapus)
+    if (sekarang - Date.parse(b.dibuat ?? "") >= JEDA_FILE_BARU_MS) buang.push(b);
+    else baru.push(b);
+  }
+  return { buang, baru };
+}
+
+export function formatUkuran(byte: number): string {
+  if (byte < 1024 * 1024) return `${Math.max(1, Math.round(byte / 1024))} KB`;
+  return `${(byte / 1024 / 1024).toLocaleString("id-ID", { maximumFractionDigits: 1 })} MB`;
+}
