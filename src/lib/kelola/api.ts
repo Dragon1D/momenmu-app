@@ -211,7 +211,7 @@ function apiSupabase(): KelolaApi {
           for (const f of data ?? []) {
             if (!f.id) continue; // folder
             const path = `${acaraId}/${sub}/${f.name}`;
-            semua.push({ path, url: sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl, ukuran: Number(f.metadata?.size ?? 0) });
+            semua.push({ path, url: sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl, ukuran: Number(f.metadata?.size ?? 0), dibuat: f.created_at ?? null });
           }
           if (!data || data.length < 1000) break;
         }
@@ -397,7 +397,7 @@ function apiDemo(): KelolaApi {
       await tunggu();
       const url = URL.createObjectURL(berkas); // hanya untuk pratinjau di mode demo (hilang saat halaman ditutup)
       const daftar = berkasPer.get(a) ?? [];
-      daftar.push({ path: `${a}/${subFolder(jenis)}/${namaBerkas(EKSTENSI[jenis] ?? "bin")}`, url, ukuran: berkas.size });
+      daftar.push({ path: `${a}/${subFolder(jenis)}/${namaBerkas(EKSTENSI[jenis] ?? "bin")}`, url, ukuran: berkas.size, dibuat: new Date().toISOString() });
       berkasPer.set(a, daftar);
       return url;
     },

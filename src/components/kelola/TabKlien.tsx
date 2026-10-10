@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import contoh from "../../../supabase/contoh-acara.json";
 import type { Konten } from "@/lib/tipe";
 import type { Acara, BerkasMedia, KelolaApi, KlienBaris } from "@/lib/kelola/tipe";
-import { dariInputWaktu, formatUkuran, mediaDariKonten, POLA_SLUG, slugDariNama, SLUG_TERLARANG, waktuWib } from "@/lib/kelola/util";
+import { dariInputWaktu, formatUkuran, pilahBerkas, POLA_SLUG, slugDariNama, SLUG_TERLARANG, waktuWib } from "@/lib/kelola/util";
 import { Isian, Modal, pesanGalat, salinTeks, type BeriTahu } from "./bersama";
 
 type Jendela = { jenis: "baru" } | { jenis: "akun" | "file" | "hapus"; r: KlienBaris };
@@ -145,7 +145,7 @@ export default function TabKlien({
           onBerubah={() => setMuat((m) => m + 1)}
         />
       )}
-      {jendela?.jenis === "file" && <CekFile api={api} r={jendela.r} daftar={daftar} beriTahu={beriTahu} onTutup={() => setJendela(null)} />}
+      {jendela?.jenis === "file" && <CekFile api={api} r={jendela.r} beriTahu={beriTahu} onTutup={() => setJendela(null)} />}
       {jendela?.jenis === "hapus" && (
         <HapusAcara
           api={api}
@@ -354,16 +354,17 @@ function SambungkanAkun({ api, r, asal, beriTahu, onTutup, onBerubah }: { api: K
 // ---------------------------------------------------------------------------
 // Cek file di folder acara & hapus yang tidak dipakai lagi
 // ---------------------------------------------------------------------------
-function CekFile({ api, r, daftar, beriTahu, onTutup }: { api: KelolaApi; r: KlienBaris; daftar: Acara[]; beriTahu: BeriTahu; onTutup: () => void }) {
-  const [berkas, setBerkas] = useState<BerkasMedia[] | null>(null);
+function CekFile({ api, r, beriTahu, onTutup }: { api: KelolaApi; r: KlienBaris; beriTahu: BeriTahu; onTutup: () => void }) {
+  // file folder acara + isi terbaru semua undangan (dibaca dari database, bukan data saat dashboard dibuka)
+  const [data, setData] = useState<{ berkas: BerkasMedia[]; acara: Acara[] } | null>(null);
   const [galat, setGalat] = useState("");
   const [sibuk, setSibuk] = useState(false);
   const [muat, setMuat] = useState(0);
 
   useEffect(() => {
     let batal = false;
-    api.daftarBerkas(r.id).then(
-      (b) => !batal && setBerkas(b),
+    Promise.all([api.daftarBerkas(r.id), api.daftarAcara()]).then(
+      ([berkas, acara]) => !batal && setData({ berkas, acara }),
       (e) => !batal && setGalat(pesanGalat(e)),
     );
     return () => {
@@ -371,16 +372,20 @@ function CekFile({ api, r, daftar, beriTahu, onTutup }: { api: KelolaApi; r: Kli
     };
   }, [api, r.id, muat]);
 
-  const dipakai = new Set<string>();
-  for (const a of daftar) for (const u of mediaDariKonten(a.konten)) dipakai.add(u);
-  const tidakDipakai = (berkas ?? []).filter((b) => !dipakai.has(b.url));
+  const berkas = data?.berkas ?? null;
+  const { buang: tidakDipakai, baru } = pilahBerkas(berkas ?? [], data?.acara ?? []);
   const total = (berkas ?? []).reduce((n, b) => n + b.ukuran, 0);
   const totalBuang = tidakDipakai.reduce((n, b) => n + b.ukuran, 0);
 
   async function bersihkan() {
     setSibuk(true);
     try {
-      const n = await api.hapusBerkas(r.id, tidakDipakai.map((b) => b.url));
+      // Baca ulang tepat sebelum menghapus: foto yang baru disimpan klien sejak jendela ini dibuka tidak ikut terhapus.
+      // Yang dihapus hanya file yang tadi ditampilkan dan sampai sekarang masih tidak dipakai.
+      const [berkasKini, acaraKini] = await Promise.all([api.daftarBerkas(r.id), api.daftarAcara()]);
+      const disetujui = new Set(tidakDipakai.map((b) => b.url));
+      const buang = pilahBerkas(berkasKini, acaraKini).buang.filter((b) => disetujui.has(b.url));
+      const n = buang.length ? await api.hapusBerkas(r.id, buang.map((b) => b.url)) : 0;
       beriTahu(`${n} file tidak terpakai dihapus`);
       setMuat((m) => m + 1);
     } catch (e) {
@@ -411,7 +416,8 @@ function CekFile({ api, r, daftar, beriTahu, onTutup }: { api: KelolaApi; r: Kli
           <p>
             <b>{berkas.length} file</b> · {formatUkuran(total)} di folder acara ini.
           </p>
-          <p>{tidakDipakai.length ? `${tidakDipakai.length} file (${formatUkuran(totalBuang)}) tidak dipakai di undangan — biasanya foto yang diunggah lalu tidak jadi dipakai.` : "Semua file dipakai di undangan."}</p>
+          <p>{tidakDipakai.length ? `${tidakDipakai.length} file (${formatUkuran(totalBuang)}) tidak dipakai di undangan — biasanya foto yang diunggah lalu tidak jadi dipakai.` : baru.length ? "Belum ada file yang aman dihapus." : "Semua file dipakai di undangan."}</p>
+          {baru.length > 0 && <p className="kl-kecil kl-redup">{baru.length} file tidak dipakai tapi diunggah kurang dari 24 jam lalu, jadi dilewati dulu (mungkin klien belum klik Simpan).</p>}
           <p className="kl-kecil kl-redup">File yang diunggah sebelum fitur folder per acara ada tidak ikut terhitung di sini.</p>
         </div>
       )}
