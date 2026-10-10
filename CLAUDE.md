@@ -8,6 +8,7 @@ Undangan pernikahan online. Next.js 16 + React 19, Supabase, deploy di Vercel. P
 3. Perubahan database ditulis sebagai file SQL baru di `supabase/migrations/` dengan nomor berikutnya. Jangan ubah atau jalankan ulang `0001_skema_awal.sql` dan `SETUP-SUPABASE.sql`. SQL dijalankan Deny di Supabase SQL Editor sebelum Merge.
 4. Isi PR selalu dibuka dengan bagian "Langkah database sebelum Merge" (tulis "tidak ada" kalau memang tidak ada), lalu ringkasan perubahan dan cara cek di pratinjau.
 5. Jangan ubah kode 1–14 Des 2026 (hari H 13 Des), kecuali Deny minta perbaikan darurat.
+6. Setiap lapor PR, tulis jelas urutan sebelum Merge: (1) jalankan SQL kalau ada, (2) coba di link pratinjau dengan langkah yang ditulis, (3) baru Merge. Kalau tidak ada yang perlu dicoba, bilang terang-terangan. Jangan bilang "tinggal merge" sebelum Deny bilang sudah mencoba pratinjau.
 
 ## Fakta teknis
 - `main` otomatis deploy ke produksi. Setiap branch dapat link pratinjau Vercel.
