@@ -17,3 +17,8 @@ Undangan pernikahan online. Next.js 16 + React 19, Supabase, deploy di Vercel. P
 - Supabase Free tidak punya backup. Migrasi yang menghapus atau mengubah data wajib disebut jelas di PR.
 - Desain mobile-first, karena tamu kebanyakan buka dari HP.
 - Kalau ragu soal API Next.js atau Supabase, cek dokumentasi resminya. Jangan mengarang nama fungsi.
+
+## Skill dan hook di repo
+- `momenmu-pr` (`.claude/skills/momenmu-pr/`): alur branch → `cek.sh` → PR. Dipakai untuk setiap perubahan. Cek wajib cukup lewat `bash .claude/skills/momenmu-pr/cek.sh`.
+- `momenmu-tes` (`.claude/skills/momenmu-tes/`): tes tampilan HP otomatis (Playwright 390×844) dengan screenshot bukti.
+- `.claude/hooks/session-start.sh` otomatis memasang dependensi di awal setiap sesi cloud.
