@@ -85,7 +85,7 @@ Urutan: **database dulu, baru kode**. Undangan & link tamu yang sudah tersebar t
 Tombol **Kirim undangan** (tab Klien → Undang klien / Atur akun) memanggil `/api/kelola/undang` di server Vercel. Server memastikan pemanggilnya admin lewat fungsi database `is_staf()`, lalu meminta Supabase membuat akun + mengirim email undangan, lalu menyambungkan acara lewat `sambungkan_pemilik()`.
 
 1. **Vercel** → Settings → Environment Variables: harus ada `SUPABASE_SERVICE_ROLE_KEY` (Production). Integrasi Supabase–Vercel biasanya sudah mengisinya otomatis. Kunci ini hanya dipakai server; **jangan** dibuat versi `NEXT_PUBLIC_`.
-2. **Supabase → Authentication → URL Configuration → Site URL**: `https://<alamat-website>/kelola` (sekarang `https://momenmu-app.vercel.app/kelola`). Link di email undangan & lupa kata sandi membuka alamat ini. Saat pindah ke domain sendiri, ganti juga di sini.
+2. **Supabase → Authentication → URL Configuration → Site URL**: `https://<alamat-website>/kelola` (sekarang `https://momenmu-app.vercel.app/kelola`), lalu di **Redirect URLs** tambahkan alamat yang sama. Link di email undangan & lupa kata sandi membuka alamat ini. Saat pindah ke domain sendiri, ganti juga di sini.
 3. **SMTP sendiri** (Authentication → SMTP Settings), wajib untuk email klien sungguhan. Tanpa ini, email bawaan Supabase hanya terkirim ke anggota tim project Supabase, maks. 2 email/jam. Contoh layanan: Resend (perlu domain sendiri), Brevo, Postmark.
 4. **Template email** (Authentication → Emails → Templates), ganti ke bahasa Indonesia:
    - *Invite user* — Subjek: `Undangan mengelola undangan digital Anda di Momenmu`

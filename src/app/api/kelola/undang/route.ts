@@ -52,7 +52,9 @@ export async function POST(request: Request) {
 
   // 3. Kirim undangan (akun dibuat otomatis). Email yang sudah punya akun cukup disambungkan.
   //    Link di email membuka /kelola; kalau alamat ini belum diizinkan di Supabase, Supabase memakai Site URL.
-  const situs = (process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin).replace(/\/$/, "");
+  //    Di produksi selalu domain produksi (bukan alias lain yang kebetulan dipakai admin), supaya cocok dengan Redirect URLs.
+  const produksi = process.env.VERCEL_ENV === "production" && process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  const situs = (process.env.NEXT_PUBLIC_SITE_URL || (produksi ? `https://${produksi}` : new URL(request.url).origin)).replace(/\/$/, "");
   const kunci = createClient(url, rahasia, tanpaSesi);
   const undang = await kunci.auth.admin.inviteUserByEmail(email, { redirectTo: `${situs}/kelola` });
   let status: "diundang" | "sudah_ada" = "diundang";
