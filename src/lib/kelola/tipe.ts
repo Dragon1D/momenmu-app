@@ -86,12 +86,26 @@ export type InputAcaraBaru = Pick<Acara, "slug" | "waktu_acara" | "batas_rsvp" |
 
 export type UbahTamu = Partial<InputTamu & Pick<TamuBaris, "kode" | "perangkat" | "status" | "jumlah_hadir" | "dijawab_pada">>;
 
+/** Halaman /kelola dibuka dari link email Supabase: undangan akun baru, lupa sandi, atau link yang sudah tidak berlaku. */
+export type LinkMasuk = { jenis: "undangan" | "pemulihan" } | { jenis: "galat"; pesan: string };
+
+/** Hasil "Kirim undangan" (khusus admin). */
+export interface HasilUndang {
+  email: string;
+  /** diundang = akun dibuat & email undangan terkirim; sudah_ada = email sudah punya akun, acara langsung disambungkan. */
+  status: "diundang" | "sudah_ada";
+}
+
 export interface KelolaApi {
   demo: boolean;
   sesi(): Promise<Pengguna | null>;
   masuk(email: string, sandi: string): Promise<Pengguna>;
   keluar(): Promise<void>;
   gantiSandi(baru: string): Promise<void>;
+  /** Jenis link email yang membuka halaman ini (dibaca sekali saat halaman dimuat). */
+  linkMasuk(): LinkMasuk | null;
+  /** Kirim link untuk membuat kata sandi baru ke email (lupa kata sandi). */
+  lupaSandi(email: string): Promise<void>;
   daftarAcara(): Promise<Acara[]>;
   simpanAcara(id: string, ubah: UbahAcara): Promise<Acara>;
   daftarTamu(acaraId: string): Promise<TamuBaris[]>;
@@ -117,6 +131,8 @@ export interface KelolaApi {
   buatAcara(data: InputAcaraBaru): Promise<Acara>;
   /** Sambungkan acara ke akun klien lewat email (null = lepaskan). Hasil: email akun. */
   sambungkanPemilik(acaraId: string, email: string | null): Promise<string | null>;
+  /** Buat akun klien + kirim email undangan, lalu sambungkan ke acara. Email yang sudah punya akun langsung disambungkan. */
+  undangKlien(acaraId: string, email: string): Promise<HasilUndang>;
   /** Hapus acara beserta tamu, ucapan, dan file di foldernya. */
   hapusAcara(acaraId: string): Promise<void>;
 }

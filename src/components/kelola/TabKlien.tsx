@@ -1,11 +1,11 @@
 "use client";
 // Tab "Klien" (khusus admin agensi): semua acara klien di satu tempat.
-// Buat acara baru (isi awal dari contoh), sambungkan akun klien, cek & bersihkan file, hapus acara.
+// Buat acara baru (isi awal dari contoh), undang/sambungkan akun klien, cek & bersihkan file, hapus acara.
 // Tiap acara punya folder file sendiri: media/<id-acara>/foto|musik/...
 import { useEffect, useState } from "react";
 import contoh from "../../../supabase/contoh-acara.json";
 import type { Konten } from "@/lib/tipe";
-import type { Acara, BerkasMedia, KelolaApi, KlienBaris } from "@/lib/kelola/tipe";
+import type { Acara, BerkasMedia, HasilUndang, KelolaApi, KlienBaris } from "@/lib/kelola/tipe";
 import { dariInputWaktu, formatUkuran, pilahBerkas, POLA_SLUG, slugDariNama, SLUG_TERLARANG, waktuWib } from "@/lib/kelola/util";
 import { Isian, Modal, pesanGalat, salinTeks, type BeriTahu } from "./bersama";
 
@@ -111,7 +111,7 @@ export default function TabKlien({
               Kelola
             </button>
             <button type="button" className="kl-btn kl-btn-garis kl-btn-kecil" onClick={() => setJendela({ jenis: "akun", r })}>
-              {r.owner_email ? "Ganti akun" : "Sambungkan akun"}
+              {r.owner_email ? "Atur akun" : "Undang klien"}
             </button>
             <button type="button" className="kl-btn kl-btn-teks kl-btn-kecil" onClick={() => setJendela({ jenis: "file", r })}>
               Cek file
@@ -131,12 +131,12 @@ export default function TabKlien({
           onDibuat={(a) => {
             setJendela(null);
             onDibuat(a);
-            beriTahu("Acara dibuat. Berikutnya: isi undangan, lalu sambungkan akun klien.");
+            beriTahu("Acara dibuat. Berikutnya: isi undangan, lalu undang klien.");
           }}
         />
       )}
       {jendela?.jenis === "akun" && (
-        <SambungkanAkun
+        <AkunKlien
           api={api}
           r={jendela.r}
           asal={asal}
@@ -250,38 +250,61 @@ function BuatAcara({ api, slugTerpakai, onTutup, onDibuat }: { api: KelolaApi; s
 }
 
 // ---------------------------------------------------------------------------
-// Sambungkan akun klien (akun dibuat dulu di Supabase → Add user)
+// Akun klien: kirim undangan lewat email (akun dibuat otomatis, acara langsung tersambung)
+// atau sambungkan akun yang sudah ada tanpa email.
 // ---------------------------------------------------------------------------
-function SambungkanAkun({ api, r, asal, beriTahu, onTutup, onBerubah }: { api: KelolaApi; r: KlienBaris; asal: string; beriTahu: BeriTahu; onTutup: () => void; onBerubah: () => void }) {
-  const [email, setEmail] = useState(r.owner_email ?? "");
-  const [tersambung, setTersambung] = useState<string | null>(null);
-  const [galat, setGalat] = useState("");
-  const [sibuk, setSibuk] = useState(false);
-  const [tersalin, setTersalin] = useState(false);
-  const pesan = tersambung
-    ? `Halo, dashboard undangan ${r.nama} sudah siap diisi.\n\nBuka: ${asal}/kelola\nEmail: ${tersambung}\nKata sandi: dikirim terpisah\n\nSetelah masuk, mohon ganti kata sandi di menu Pengaturan.`
-    : "";
+type HasilAkun = { cara: "undang"; email: string; status: HasilUndang["status"] } | { cara: "sambung"; email: string };
 
-  async function sambungkan(e: React.FormEvent) {
+function AkunKlien({ api, r, asal, beriTahu, onTutup, onBerubah }: { api: KelolaApi; r: KlienBaris; asal: string; beriTahu: BeriTahu; onTutup: () => void; onBerubah: () => void }) {
+  const [email, setEmail] = useState(r.owner_email ?? "");
+  const [hasil, setHasil] = useState<HasilAkun | null>(null);
+  const [galat, setGalat] = useState("");
+  const [sibuk, setSibuk] = useState<"" | "undang" | "sambung" | "lepas">("");
+  const [tersalin, setTersalin] = useState(false);
+  const alamat = email.trim().toLowerCase();
+
+  function emailBenar() {
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(alamat)) return true;
+    setGalat("Tulis email klien yang benar.");
+    return false;
+  }
+
+  async function undang(e: React.FormEvent) {
     e.preventDefault();
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return setGalat("Tulis email akun klien yang benar.");
+    if (!emailBenar()) return;
     setGalat("");
-    setSibuk(true);
+    setSibuk("undang");
     try {
-      const hasil = await api.sambungkanPemilik(r.id, email);
-      setTersambung(hasil ?? email.trim().toLowerCase());
+      const h = await api.undangKlien(r.id, alamat);
+      setHasil({ cara: "undang", ...h });
+      onBerubah();
+      beriTahu(h.status === "diundang" ? "Undangan terkirim ke email klien" : "Akun klien tersambung");
+    } catch (er) {
+      setGalat(pesanGalat(er));
+    } finally {
+      setSibuk("");
+    }
+  }
+
+  async function sambungkan() {
+    if (!emailBenar()) return;
+    setGalat("");
+    setSibuk("sambung");
+    try {
+      const h = await api.sambungkanPemilik(r.id, alamat);
+      setHasil({ cara: "sambung", email: h ?? alamat });
       onBerubah();
       beriTahu("Akun klien tersambung");
     } catch (er) {
       setGalat(pesanGalat(er));
     } finally {
-      setSibuk(false);
+      setSibuk("");
     }
   }
 
   async function lepaskan() {
     if (!window.confirm(`Lepaskan ${r.owner_email} dari acara ${r.nama}? Akun itu tidak bisa membuka dashboard acara ini lagi.`)) return;
-    setSibuk(true);
+    setSibuk("lepas");
     try {
       await api.sambungkanPemilik(r.id, null);
       onBerubah();
@@ -289,38 +312,64 @@ function SambungkanAkun({ api, r, asal, beriTahu, onTutup, onBerubah }: { api: K
       onTutup();
     } catch (er) {
       setGalat(pesanGalat(er));
-      setSibuk(false);
+      setSibuk("");
     }
   }
+
+  const pesan = !hasil
+    ? ""
+    : hasil.cara === "undang" && hasil.status === "diundang"
+      ? `Halo, undangan untuk mengelola dashboard undangan ${r.nama} sudah kami kirim ke email ${hasil.email}.\n\nBuka email dari Momenmu (cek juga folder Spam atau Promosi), klik tautannya, lalu buat kata sandi. Setelah itu dashboard bisa dibuka kapan saja di ${asal}/kelola`
+      : hasil.cara === "undang"
+        ? `Halo, dashboard undangan ${r.nama} sudah bisa dibuka di ${asal}/kelola\n\nMasuk dengan email ${hasil.email} dan kata sandi Anda. Lupa kata sandi? Klik “Lupa kata sandi?” di halaman masuk.`
+        : `Halo, dashboard undangan ${r.nama} sudah siap diisi.\n\nBuka: ${asal}/kelola\nEmail: ${hasil.email}\nKata sandi: dikirim terpisah\n\nSetelah masuk, mohon ganti kata sandi di menu Pengaturan.`;
 
   return (
     <Modal
       judul={`Akun klien — ${r.nama}`}
       onTutup={onTutup}
       kaki={
-        tersambung ? (
+        hasil ? (
           <button type="button" className="kl-btn kl-btn-utama" onClick={onTutup}>
             Selesai
           </button>
         ) : (
           <>
             {r.owner_email && (
-              <button type="button" className="kl-btn kl-btn-teks kl-merah" onClick={lepaskan} disabled={sibuk}>
+              <button type="button" className="kl-btn kl-btn-teks kl-merah" onClick={lepaskan} disabled={!!sibuk}>
                 Lepaskan akun
               </button>
             )}
-            <button type="submit" form="kl-form-akun" className="kl-btn kl-btn-utama" disabled={sibuk}>
-              {sibuk ? "Menyambungkan…" : "Sambungkan"}
+            <button type="button" className="kl-btn kl-btn-garis" onClick={sambungkan} disabled={!!sibuk}>
+              {sibuk === "sambung" ? "Menyambungkan…" : "Sambungkan saja"}
+            </button>
+            <button type="submit" form="kl-form-akun" className="kl-btn kl-btn-utama" disabled={!!sibuk}>
+              {sibuk === "undang" ? "Mengirim…" : "Kirim undangan"}
             </button>
           </>
         )
       }
     >
-      {tersambung ? (
+      {hasil ? (
         <div className="kl-tumpuk-kecil">
-          <p>
-            <b>{tersambung}</b> sekarang memegang acara ini. Kirim pesan ini ke klien, lalu kirim kata sandinya terpisah:
-          </p>
+          {hasil.cara === "undang" && hasil.status === "diundang" ? (
+            <>
+              <p className="kl-berhasil" role="status">
+                ✓ Undangan terkirim ke <b>{hasil.email}</b>
+              </p>
+              <p>Acara ini sudah tersambung ke email itu. Klien tinggal membuka email dari Momenmu, klik tautannya, lalu membuat kata sandi. Dashboard acaranya langsung terbuka.</p>
+              <p className="kl-kecil kl-redup">Link di email berlaku terbatas. Kalau klien terlambat membukanya, buka menu ini lagi lalu klik Kirim undangan.</p>
+            </>
+          ) : hasil.cara === "undang" ? (
+            <p>
+              <b>{hasil.email}</b> sudah punya akun, jadi acara ini langsung disambungkan tanpa email undangan. Klien cukup masuk seperti biasa.
+            </p>
+          ) : (
+            <p>
+              <b>{hasil.email}</b> sekarang memegang acara ini. Kirim pesan ini ke klien, lalu kirim kata sandinya terpisah:
+            </p>
+          )}
+          {hasil.cara === "undang" && <p className="kl-kecil">Kabari klien lewat WhatsApp (opsional):</p>}
           <pre className="kl-kode-blok kl-pesan-blok">{pesan}</pre>
           <div className="kl-baris-tombol">
             <button type="button" className="kl-btn kl-btn-garis" onClick={async () => setTersalin(await salinTeks(pesan))}>
@@ -329,17 +378,27 @@ function SambungkanAkun({ api, r, asal, beriTahu, onTutup, onBerubah }: { api: K
           </div>
         </div>
       ) : (
-        <form id="kl-form-akun" className="kl-tumpuk-kecil" onSubmit={sambungkan}>
-          <ol className="kl-langkah">
-            <li>
-              Buat akunnya dulu: Supabase → Authentication → Users → <b>Add user</b> → Create new user, centang <b>Auto Confirm User</b>.
-            </li>
-            <li>Tulis email akun itu di bawah, lalu klik Sambungkan.</li>
-          </ol>
-          <Isian label="Email akun klien" wajib>
-            <input type="email" inputMode="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="klien@email.com" data-fokus />
+        <form id="kl-form-akun" className="kl-tumpuk-kecil" onSubmit={undang} noValidate>
+          <p>
+            Ketik email klien, lalu klik <b>Kirim undangan</b>. Akunnya dibuat otomatis, klien menerima email untuk membuat kata sandi, dan acara ini langsung tersambung.
+          </p>
+          <Isian label="Email klien" wajib>
+            <input
+              type="email"
+              inputMode="email"
+              autoComplete="off"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setGalat("");
+              }}
+              placeholder="klien@email.com"
+              data-fokus
+            />
           </Isian>
-          <p className="kl-kecil kl-redup">Klien hanya bisa melihat & mengubah acara ini. Satu akun boleh memegang lebih dari satu acara.</p>
+          <p className="kl-kecil kl-redup">
+            Mau tanpa email? Klik <b>Sambungkan saja</b> (akunnya harus sudah ada). Klien hanya bisa melihat & mengubah acaranya sendiri; satu akun boleh memegang lebih dari satu acara.
+          </p>
           {galat && (
             <p className="kl-galat" role="alert">
               {galat}

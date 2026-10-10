@@ -62,6 +62,14 @@
   color: var(--kl-galat);
   font-size: 14px;
 }
+.kl-berhasil {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--kl-ok-latar);
+  color: var(--kl-ok);
+  font-size: 14px;
+}
 .kl-catatan {
   margin: 0;
   padding: 10px 12px;
@@ -436,6 +444,9 @@
 .kl-masuk-kartu > p {
   margin: 0;
   text-align: center;
+}
+.kl-lupa {
+  align-self: center;
 }
 .kl-masuk-logo {
   width: 190px;
