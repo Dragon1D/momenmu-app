@@ -6,7 +6,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import contoh from "../../../supabase/contoh-acara.json";
 import type { Hadiah, Konten, NamaTema } from "../tipe";
-import type { Acara, BerkasMedia, InputTamu, KelolaApi, KlienBaris, Pengguna, TamuBaris, UbahAcara, UcapanBaris } from "./tipe";
+import type { Acara, BerkasMedia, HasilUndang, InputTamu, KelolaApi, KlienBaris, LinkMasuk, Pengguna, TamuBaris, UbahAcara, UcapanBaris } from "./tipe";
 
 const BUCKET = "media";
 const EKSTENSI: Record<string, string> = {
@@ -36,10 +36,52 @@ const PESAN: Record<string, string> = {
   "Invalid login credentials": "Email atau kata sandi salah.",
   "Email not confirmed": "Email belum dikonfirmasi. Konfirmasi dulu lewat Supabase → Authentication → Users.",
   "duplicate key value violates unique constraint \"events_slug_key\"": "Alamat (slug) itu sudah dipakai acara lain.",
-  akun_tidak_ditemukan: "Email itu belum punya akun. Buat dulu di Supabase → Authentication → Users → Add user (centang Auto Confirm User).",
+  akun_tidak_ditemukan: "Email itu belum punya akun. Klik “Kirim undangan” supaya akunnya dibuat otomatis.",
   acara_tidak_ditemukan: "Acara tidak ditemukan (mungkin sudah dihapus). Muat ulang halaman.",
   khusus_admin: "Hanya admin Momenmu yang bisa melakukan ini.",
 };
+
+/** Pesan dari /api/kelola/undang (kode galat → kalimat untuk admin). */
+const PESAN_UNDANG: Record<string, string> = {
+  email_tidak_valid: "Tulis email klien yang benar.",
+  belum_masuk: "Sesi berakhir. Silakan keluar lalu masuk lagi.",
+  khusus_admin: "Hanya admin Momenmu yang bisa mengirim undangan.",
+  acara_tidak_ditemukan: PESAN.acara_tidak_ditemukan,
+  belum_disetel: "Server belum punya kunci admin Supabase (SUPABASE_SERVICE_ROLE_KEY di Vercel). Pakai “Sambungkan saja” dulu.",
+  batas_email: "Batas kirim email Supabase sedang penuh. Coba lagi nanti, atau pasang SMTP sendiri supaya batasnya lebih longgar.",
+  email_belum_diizinkan: "Email ini belum bisa dikirimi undangan karena SMTP sendiri belum dipasang. Email bawaan Supabase hanya mengirim ke anggota tim project.",
+  gagal_sambung: "Undangan terkirim, tapi acara gagal disambungkan. Klik “Sambungkan saja” dengan email yang sama.",
+  gagal: "Supabase belum bisa mengirim undangan. Coba lagi beberapa saat lagi.",
+};
+
+/**
+ * Link email Supabase membuka /kelola dengan #access_token=…&type=invite|recovery (atau #error_code=… kalau
+ * link sudah tidak berlaku). Dibaca sekali sebelum Supabase membersihkan alamat halaman.
+ */
+function bacaLinkMasuk(): LinkMasuk | null {
+  if (typeof window === "undefined") return null;
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const query = new URLSearchParams(window.location.search);
+  const ambil = (k: string) => hash.get(k) ?? query.get(k);
+  const kodeGalat = ambil("error_code") ?? ambil("error");
+  if (kodeGalat) {
+    // tanpa sesi baru: bersihkan alamat supaya sesi lama (kalau ada) tetap dipakai dan pesan tidak muncul lagi saat dimuat ulang
+    window.history.replaceState(window.history.state, "", window.location.pathname);
+    const kedaluwarsa = kodeGalat === "otp_expired" || /expired|invalid/i.test(ambil("error_description") ?? "");
+    return {
+      jenis: "galat",
+      pesan: kedaluwarsa
+        ? "Link dari email sudah kedaluwarsa atau sudah pernah dipakai. Minta admin Momenmu mengirim ulang undangan, atau klik “Lupa kata sandi?” di bawah."
+        : "Link dari email tidak bisa dipakai. Minta admin Momenmu mengirim ulang undangan.",
+    };
+  }
+  if (!hash.get("access_token")) return null;
+  const tipe = hash.get("type");
+  return tipe === "invite" ? { jenis: "undangan" } : tipe === "recovery" ? { jenis: "pemulihan" } : null;
+}
+
+/** Alamat dashboard untuk link di email (domain sendiri kalau NEXT_PUBLIC_SITE_URL diisi). */
+const alamatKelola = () => `${(process.env.NEXT_PUBLIC_SITE_URL || window.location.origin).replace(/\/$/, "")}/kelola`;
 
 function galat(e: { message?: string } | null | undefined, cadangan = "Terjadi kesalahan. Coba lagi."): Error {
   const m = e?.message ?? "";
@@ -57,6 +99,11 @@ function galat(e: { message?: string } | null | undefined, cadangan = "Terjadi k
   if (/exceeded the maximum allowed size|payload too large|too large/i.test(m)) return new Error("Berkas terlalu besar (maks. 10 MB).");
   if (/mime type|invalid_mime_type/i.test(m)) return new Error("Jenis berkas tidak didukung. Gunakan JPG/PNG/WebP untuk foto, MP3/M4A untuk musik.");
   if (/bucket not found/i.test(m)) return new Error("Penyimpanan belum disiapkan. Jalankan file SQL 0002 di Supabase dulu.");
+  const jeda = m.match(/only request this after (\d+) seconds?/i);
+  if (jeda) return new Error(`Tunggu ${jeda[1]} detik sebelum meminta link lagi.`);
+  if (/rate limit/i.test(m)) return new Error("Terlalu banyak permintaan email. Coba lagi sekitar 1 jam lagi.");
+  if (/cannot be used as it is not authorized|email_address_not_authorized/i.test(m)) return new Error("Pengiriman email belum aktif. Hubungi admin Momenmu.");
+  if (/should be different from the old password/i.test(m)) return new Error("Kata sandi baru harus berbeda dari yang lama.");
   if (m.toLowerCase().includes("fetch")) return new Error("Tidak bisa terhubung ke server. Periksa internet Anda.");
   return new Error(m || cadangan);
 }
@@ -65,6 +112,7 @@ function galat(e: { message?: string } | null | undefined, cadangan = "Terjadi k
 // Supabase
 // ---------------------------------------------------------------------------
 function apiSupabase(): KelolaApi {
+  const link = bacaLinkMasuk(); // harus sebelum createClient (Supabase menghapus #access_token dari alamat)
   const sb: SupabaseClient = createClient(URL_SB!, KUNCI_SB!, {
     auth: { persistSession: true, autoRefreshToken: true, storageKey: "momenmu-kelola" },
   });
@@ -105,6 +153,13 @@ function apiSupabase(): KelolaApi {
     async gantiSandi(baru) {
       const { error } = await sb.auth.updateUser({ password: baru });
       if (error) throw galat(error, "Gagal mengganti kata sandi.");
+    },
+    linkMasuk() {
+      return link;
+    },
+    async lupaSandi(email) {
+      const { error } = await sb.auth.resetPasswordForEmail(email.trim(), { redirectTo: alamatKelola() });
+      if (error) throw galat(error, "Gagal mengirim link. Coba lagi.");
     },
     async daftarAcara() {
       const { data, error } = await sb.from("events").select(KOLOM_ACARA).order("waktu_acara");
@@ -246,6 +301,25 @@ function apiSupabase(): KelolaApi {
       if (error) throw galat(error);
       return (data as string | null) ?? null;
     },
+    async undangKlien(acaraId, email) {
+      // lewat server (/api/kelola/undang) karena membuat akun butuh kunci admin Supabase yang tidak boleh ada di browser
+      const { data } = await sb.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error("Sesi berakhir. Silakan keluar lalu masuk lagi.");
+      let r: Response;
+      try {
+        r = await fetch("/api/kelola/undang", {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+          body: JSON.stringify({ acaraId, email: email.trim() }),
+        });
+      } catch {
+        throw new Error("Tidak bisa terhubung ke server. Periksa internet Anda.");
+      }
+      const j = (await r.json().catch(() => ({}))) as { email?: string; status?: HasilUndang["status"]; galat?: string };
+      if (!r.ok || !j.status) throw new Error(PESAN_UNDANG[j.galat ?? ""] ?? "Gagal mengirim undangan. Coba lagi.");
+      return { email: j.email ?? email.trim().toLowerCase(), status: j.status };
+    },
     async hapusAcara(acaraId) {
       const berkas = await this.daftarBerkas(acaraId);
       if (berkas.length) await this.hapusBerkas(acaraId, berkas.map((b) => b.url));
@@ -329,6 +403,12 @@ function apiDemo(): KelolaApi {
       masukSebagai = null;
     },
     async gantiSandi() {
+      await tunggu();
+    },
+    linkMasuk() {
+      return null;
+    },
+    async lupaSandi() {
       await tunggu();
     },
     async daftarAcara() {
@@ -448,6 +528,14 @@ function apiDemo(): KelolaApi {
       const e = email?.trim().toLowerCase() || null;
       pemilik.set(a, e);
       return e;
+    },
+    async undangKlien(a, email) {
+      await tunggu();
+      const e = email.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) throw new Error(PESAN_UNDANG.email_tidak_valid);
+      const sudahAda = [...pemilik.values()].includes(e);
+      pemilik.set(a, e);
+      return { email: e, status: sudahAda ? "sudah_ada" : "diundang" };
     },
     async hapusAcara(a) {
       await tunggu();

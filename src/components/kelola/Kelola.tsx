@@ -5,9 +5,9 @@
 import "./kelola.css";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { kelolaApi } from "@/lib/kelola/api";
-import type { Acara, Pengguna, TamuBaris, UcapanBaris } from "@/lib/kelola/tipe";
+import type { Acara, KelolaApi, LinkMasuk, Pengguna, TamuBaris, UcapanBaris } from "@/lib/kelola/tipe";
 import { kodeUnik, linkTamu } from "@/lib/kelola/util";
-import { asalSitus, Isian, PRATINJAU, pesanGalat, salinTeks, type BeriTahu } from "./bersama";
+import { asalSitus, Isian, Modal, PRATINJAU, pesanGalat, type BeriTahu } from "./bersama";
 import Ringkasan from "./Ringkasan";
 import TabTamu, { type FilterTamu } from "./TabTamu";
 import TabKonten from "./TabKonten";
@@ -17,17 +17,29 @@ import TabKlien from "./TabKlien";
 
 export type Tab = "klien" | "ringkasan" | "tamu" | "konten" | "ucapan" | "pengaturan";
 
+type JenisSandi = "undangan" | "pemulihan";
+
 export default function Kelola() {
   // undefined = sedang memeriksa sesi (juga saat render di server)
   const [pengguna, setPengguna] = useState<Pengguna | null | undefined>(undefined);
+  // dibuka dari link email: undangan akun baru / lupa sandi (minta buat kata sandi) atau link kedaluwarsa
+  const [link, setLink] = useState<LinkMasuk | null>(null);
+  const [sandiSelesai, setSandiSelesai] = useState(false);
   useEffect(() => {
     let batal = false;
-    kelolaApi()
-      .sesi()
-      .then(
-        (p) => !batal && setPengguna(p),
-        () => !batal && setPengguna(null),
-      );
+    const api = kelolaApi();
+    api.sesi().then(
+      (p) => {
+        if (batal) return;
+        setLink(api.linkMasuk());
+        setPengguna(p);
+      },
+      () => {
+        if (batal) return;
+        setLink(api.linkMasuk());
+        setPengguna(null);
+      },
+    );
     return () => {
       batal = true;
     };
@@ -40,24 +52,28 @@ export default function Kelola() {
       </main>
     );
   }
-  if (!pengguna) return <Masuk onMasuk={setPengguna} />;
-  return <Dasbor pengguna={pengguna} onKeluar={() => setPengguna(null)} />;
+  if (!pengguna) return <Masuk onMasuk={setPengguna} galatLink={link?.jenis === "galat" ? link.pesan : ""} />;
+  const buatSandi: JenisSandi | null = !sandiSelesai && link && link.jenis !== "galat" ? link.jenis : null;
+  return <Dasbor pengguna={pengguna} onKeluar={() => setPengguna(null)} buatSandi={buatSandi} onSandiSelesai={() => setSandiSelesai(true)} />;
 }
 
 // ---------------------------------------------------------------------------
 // Halaman masuk
 // ---------------------------------------------------------------------------
-function Masuk({ onMasuk }: { onMasuk: (p: Pengguna) => void }) {
+function Masuk({ onMasuk, galatLink }: { onMasuk: (p: Pengguna) => void; galatLink: string }) {
   const api = kelolaApi();
   const [email, setEmail] = useState("");
   const [sandi, setSandi] = useState("");
   const [lihat, setLihat] = useState(false);
   const [galat, setGalat] = useState("");
+  const [info, setInfo] = useState("");
   const [sibuk, setSibuk] = useState(false);
+  const [mengirim, setMengirim] = useState(false);
 
   async function kirim(e: React.FormEvent) {
     e.preventDefault();
     setGalat("");
+    setInfo("");
     setSibuk(true);
     try {
       onMasuk(await api.masuk(email, sandi));
@@ -67,12 +83,33 @@ function Masuk({ onMasuk }: { onMasuk: (p: Pengguna) => void }) {
     }
   }
 
+  async function lupa() {
+    setGalat("");
+    setInfo("");
+    const alamat = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(alamat)) return setGalat("Tulis email Anda dulu di atas, lalu klik “Lupa kata sandi?” lagi.");
+    setMengirim(true);
+    try {
+      await api.lupaSandi(alamat);
+      setInfo(`Kalau ${alamat} terdaftar, link untuk membuat kata sandi baru sudah dikirim ke email itu. Cek juga folder Spam atau Promosi.`);
+    } catch (er) {
+      setGalat(pesanGalat(er));
+    } finally {
+      setMengirim(false);
+    }
+  }
+
   return (
     <main className="kl kl-masuk">
       <form className="kl-kartu kl-masuk-kartu" onSubmit={kirim}>
         <img src="/brand/logo.png" alt="momenmu.id — Untuk Setiap Momen Berharga" className="kl-masuk-logo" />
         <h1>Kelola Undangan</h1>
         <p className="kl-redup">Masuk untuk mengatur isi undangan, daftar tamu, dan ucapan.</p>
+        {galatLink && (
+          <p className="kl-galat" role="alert">
+            {galatLink}
+          </p>
+        )}
         {api.demo && <p className="kl-catatan">Mode demo (Supabase belum diisi): masukkan email & sandi apa saja. Perubahan hanya tersimpan di tab ini.</p>}
         <Isian label="Email">
           <input type="email" autoComplete="username" inputMode="email" required={!api.demo} value={email} onChange={(e) => setEmail(e.target.value)} data-fokus />
@@ -93,12 +130,93 @@ function Masuk({ onMasuk }: { onMasuk: (p: Pengguna) => void }) {
             {galat}
           </p>
         )}
+        {info && (
+          <p className="kl-berhasil" role="status">
+            {info}
+          </p>
+        )}
         <button type="submit" className="kl-btn kl-btn-utama kl-btn-penuh" disabled={sibuk}>
           {sibuk ? "Memeriksa…" : "Masuk"}
         </button>
-        <p className="kl-kecil kl-redup">Lupa sandi? Atur ulang di Supabase → Authentication → Users.</p>
+        {!api.demo && (
+          <button type="button" className="kl-btn kl-btn-teks kl-btn-kecil kl-lupa" onClick={lupa} disabled={mengirim}>
+            {mengirim ? "Mengirim link…" : "Lupa kata sandi?"}
+          </button>
+        )}
       </form>
     </main>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Buat kata sandi (dibuka dari link undangan / lupa kata sandi di email)
+// ---------------------------------------------------------------------------
+function BuatSandi({ api, pengguna, jenis, onSelesai }: { api: KelolaApi; pengguna: Pengguna; jenis: JenisSandi; onSelesai: (tersimpan: boolean) => void }) {
+  const [a, setA] = useState("");
+  const [b, setB] = useState("");
+  const [lihat, setLihat] = useState(false);
+  const [galat, setGalat] = useState("");
+  const [sibuk, setSibuk] = useState(false);
+
+  async function simpan(e: React.FormEvent) {
+    e.preventDefault();
+    if (a.length < 8) return setGalat("Kata sandi minimal 8 karakter.");
+    if (a !== b) return setGalat("Kedua kata sandi belum sama.");
+    setGalat("");
+    setSibuk(true);
+    try {
+      await api.gantiSandi(a);
+      onSelesai(true);
+    } catch (er) {
+      setGalat(pesanGalat(er));
+      setSibuk(false);
+    }
+  }
+
+  return (
+    <Modal
+      judul={jenis === "undangan" ? "Selamat datang di Momenmu" : "Buat kata sandi baru"}
+      onTutup={() => onSelesai(false)}
+      kaki={
+        <>
+          <button type="button" className="kl-btn kl-btn-teks" onClick={() => onSelesai(false)}>
+            Nanti saja
+          </button>
+          <button type="submit" form="kl-form-sandi" className="kl-btn kl-btn-utama" disabled={sibuk}>
+            {sibuk ? "Menyimpan…" : "Simpan kata sandi"}
+          </button>
+        </>
+      }
+    >
+      <form id="kl-form-sandi" className="kl-tumpuk-kecil" onSubmit={simpan}>
+        <p>
+          {jenis === "undangan" ? (
+            <>
+              Anda masuk sebagai <b>{pengguna.email}</b>. Buat kata sandi dulu supaya nanti bisa masuk lagi dari HP atau laptop mana pun.
+            </>
+          ) : (
+            <>
+              Buat kata sandi baru untuk <b>{pengguna.email}</b>.
+            </>
+          )}
+        </p>
+        <input type="text" name="username" autoComplete="username" value={pengguna.email} readOnly hidden />
+        <Isian label="Kata sandi baru" wajib bantuan="Minimal 8 karakter.">
+          <input type={lihat ? "text" : "password"} autoComplete="new-password" value={a} onChange={(e) => setA(e.target.value)} data-fokus />
+        </Isian>
+        <Isian label="Ulangi kata sandi" wajib>
+          <input type={lihat ? "text" : "password"} autoComplete="new-password" value={b} onChange={(e) => setB(e.target.value)} />
+        </Isian>
+        <label className="kl-cek-label kl-kecil">
+          <input type="checkbox" checked={lihat} onChange={(e) => setLihat(e.target.checked)} /> Tampilkan kata sandi
+        </label>
+        {galat && (
+          <p className="kl-galat" role="alert">
+            {galat}
+          </p>
+        )}
+      </form>
+    </Modal>
   );
 }
 
@@ -117,7 +235,7 @@ const TAB_KLIEN: { id: Tab; label: string } = { id: "klien", label: "Klien" };
 
 const namaAcara = (a: Acara) => `${a.konten.mempelai.pria.panggilan} & ${a.konten.mempelai.wanita.panggilan}`;
 
-function Dasbor({ pengguna, onKeluar }: { pengguna: Pengguna; onKeluar: () => void }) {
+function Dasbor({ pengguna, onKeluar, buatSandi, onSandiSelesai }: { pengguna: Pengguna; onKeluar: () => void; buatSandi: JenisSandi | null; onSandiSelesai: () => void }) {
   const api = kelolaApi();
   const [daftar, setDaftar] = useState<Acara[] | null>(null);
   const [acaraId, setAcaraId] = useState<string | null>(null);
@@ -285,7 +403,7 @@ function Dasbor({ pengguna, onKeluar }: { pengguna: Pengguna; onKeluar: () => vo
     );
   }
 
-  if (!acara && !staf) return <BelumTerhubung pengguna={pengguna} onKeluar={keluar} />;
+  if (!acara && !staf) return <BelumTerhubung api={api} pengguna={pengguna} onKeluar={keluar} buatSandi={buatSandi} onSandiSelesai={onSandiSelesai} />;
   const daftarTab = staf ? [TAB_KLIEN, ...(acara ? TAB : [])] : TAB;
 
   return (
@@ -362,6 +480,18 @@ function Dasbor({ pengguna, onKeluar }: { pengguna: Pengguna; onKeluar: () => vo
         )}
       </main>
 
+      {buatSandi && (
+        <BuatSandi
+          api={api}
+          pengguna={pengguna}
+          jenis={buatSandi}
+          onSelesai={(tersimpan) => {
+            onSandiSelesai();
+            if (tersimpan) beriTahu("Kata sandi tersimpan. Berikutnya masuk pakai email & kata sandi ini.");
+          }}
+        />
+      )}
+
       {toast && (
         <div key={toast.n} className={`kl-toast ${toast.jenis === "galat" ? "kl-toast-galat" : ""}`} role={toast.jenis === "galat" ? "alert" : "status"}>
           {toast.teks}
@@ -374,37 +504,34 @@ function Dasbor({ pengguna, onKeluar }: { pengguna: Pengguna; onKeluar: () => vo
 // ---------------------------------------------------------------------------
 // Akun belum dihubungkan ke acara mana pun
 // ---------------------------------------------------------------------------
-function BelumTerhubung({ pengguna, onKeluar }: { pengguna: Pengguna; onKeluar: () => void }) {
-  const [tersalin, setTersalin] = useState(false);
-  const sql = `insert into public.staf (user_id, catatan) values ('${pengguna.id}', 'admin Momenmu') on conflict (user_id) do nothing;`;
+function BelumTerhubung({
+  api,
+  pengguna,
+  onKeluar,
+  buatSandi,
+  onSandiSelesai,
+}: {
+  api: KelolaApi;
+  pengguna: Pengguna;
+  onKeluar: () => void;
+  buatSandi: JenisSandi | null;
+  onSandiSelesai: () => void;
+}) {
+  const [tersimpan, setTersimpan] = useState(false);
+  // Petunjuk menjadikan akun sebagai admin sengaja tidak ditampilkan di sini (halaman ini juga dilihat klien);
+  // caranya ada di README & file SQL 0003.
   return (
     <main className="kl kl-tengah">
       <div className="kl-kartu kl-sempit">
         <h1 className="kl-judul">Akun belum terhubung ke undangan</h1>
         <p>
-          Anda masuk sebagai <b>{pengguna.email}</b>, tetapi akun ini belum memegang acara apa pun. Minta admin Momenmu menyambungkan email ini ke acara Anda, lalu muat ulang halaman.
+          Anda masuk sebagai <b>{pengguna.email}</b>, tetapi akun ini belum tersambung ke acara mana pun. Hubungi admin Momenmu supaya email ini disambungkan ke undangan Anda, lalu muat ulang halaman.
         </p>
-        <details className="kl-rincian">
-          <summary>Untuk admin Momenmu</summary>
-          <ol className="kl-langkah">
-            <li>
-              Menyambungkan klien: masuk dengan akun admin → tab <b>Klien</b> → <b>Sambungkan akun</b> → tulis email ini.
-            </li>
-            <li>
-              Menjadikan akun <i>ini</i> sebagai admin (sekali saja, setelah file SQL 0003 dijalankan): Supabase → SQL Editor → jalankan perintah di bawah → muat ulang.
-            </li>
-          </ol>
-          <pre className="kl-kode-blok">{sql}</pre>
-          <button
-            type="button"
-            className="kl-btn kl-btn-garis kl-btn-kecil"
-            onClick={async () => {
-              setTersalin(await salinTeks(sql));
-            }}
-          >
-            {tersalin ? "Tersalin ✓" : "Salin perintah"}
-          </button>
-        </details>
+        {tersimpan && (
+          <p className="kl-berhasil" role="status">
+            Kata sandi tersimpan.
+          </p>
+        )}
         <div className="kl-baris-tombol">
           <button type="button" className="kl-btn kl-btn-utama" onClick={() => window.location.reload()}>
             Muat ulang
@@ -414,6 +541,17 @@ function BelumTerhubung({ pengguna, onKeluar }: { pengguna: Pengguna; onKeluar: 
           </button>
         </div>
       </div>
+      {buatSandi && (
+        <BuatSandi
+          api={api}
+          pengguna={pengguna}
+          jenis={buatSandi}
+          onSelesai={(ok) => {
+            onSandiSelesai();
+            setTersimpan(ok);
+          }}
+        />
+      )}
     </main>
   );
 }
